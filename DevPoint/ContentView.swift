@@ -6,19 +6,24 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        TabView {
+            CheckpointsView()
+                .tabItem {
+                    Label("Websites", systemImage: "network")
+                }
+            APIView()
+                .tabItem {
+                    Label("APIs", systemImage: "server.rack")
+                }
         }
-        .padding()
     }
 }
 
 #Preview {
     ContentView()
+        .modelContainer(for: WebsiteCheckpoint.self, inMemory: true)
 }
