@@ -79,8 +79,8 @@ struct AddCheckpointResponseView: View {
             .buttonStyle(.borderedProminent)
             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
             .listRowBackground(Color.clear)
-        } footer: {
-            Text("This response body becomes the expected baseline for future checks.")
+} footer: {
+            Text("This first sample becomes the expected baseline. Lines that changed across the four samples are pre-selected as ignored.")
         }
     }
 }

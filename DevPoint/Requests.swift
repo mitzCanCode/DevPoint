@@ -124,6 +124,73 @@ func differingLineNumbers(expected: String, actual: String) -> Set<Int> {
     return result
 }
 
+/// 1-based line numbers that are not identical across every sampled response body.
+func unstableLineNumbers(across bodies: [String]) -> [Int] {
+    guard let first = bodies.first else { return [] }
+
+    var unstable = Set<Int>()
+    for body in bodies.dropFirst() {
+        unstable.formUnion(differingLineNumbers(expected: first, actual: body))
+    }
+
+    return unstable.sorted()
+}
+
+enum ResponseSampleError: LocalizedError {
+    case requestFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .requestFailed(let message):
+            return message
+        }
+    }
+}
+
+struct ResponseSampleResult {
+    let baseline: URLResponseResult
+    let ignoredLineNumbers: [Int]
+}
+
+let responseSampleRequestCount = 4
+let responseSampleDelayNanoseconds: UInt64 = 1_000_000_000
+
+/// Fetches the URL several times with a delay, using the first body as baseline
+/// and auto-ignoring lines that change across samples.
+func sampleResponseBaseline(
+    from url: URL,
+    sampleCount: Int = responseSampleRequestCount,
+    delayNanoseconds: UInt64 = responseSampleDelayNanoseconds,
+    onProgress: ((String) -> Void)? = nil
+) async throws -> ResponseSampleResult {
+    var samples: [URLResponseResult] = []
+    samples.reserveCapacity(sampleCount)
+
+    for index in 1...sampleCount {
+        onProgress?("Request \(index) of \(sampleCount)…")
+        let result = await requestUrl(url)
+
+        if let errorMessage = result.errorMessage, result.statusCode == -1 {
+            throw ResponseSampleError.requestFailed(errorMessage)
+        }
+
+        samples.append(result)
+
+        if index < sampleCount {
+            try? await Task.sleep(nanoseconds: delayNanoseconds)
+        }
+    }
+
+    guard let baseline = samples.first else {
+        throw ResponseSampleError.requestFailed("No responses were received.")
+    }
+
+    return ResponseSampleResult(
+        baseline: baseline,
+        ignoredLineNumbers: unstableLineNumbers(across: samples.map(\.body))
+    )
+}
+
 func determineCheckpointStatus(
     statusCode: Int,
     match: ResponseMatchKind

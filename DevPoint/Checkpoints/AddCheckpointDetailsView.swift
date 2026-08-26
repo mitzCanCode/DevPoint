@@ -11,7 +11,8 @@ struct AddCheckpointDetailsView: View {
     @Binding var name: String
     @Binding var urlString: String
 
-    let isLoading: Bool
+let isLoading: Bool
+    let loadingProgress: String?
     let requestError: String?
     let normalizedURL: URL?
     let onMakeRequest: () -> Void
@@ -53,8 +54,8 @@ struct AddCheckpointDetailsView: View {
                 .autocorrectionDisabled()
         } header: {
             Text("Checkpoint Details")
-        } footer: {
-            Text("Enter a name and URL, then open the site or fetch a live response to use as the baseline.")
+} footer: {
+            Text("Enter a name and URL, then open the site or sample the live response. Four requests are made one second apart so fluctuating lines can be ignored automatically.")
         }
     }
 
@@ -68,15 +69,15 @@ struct AddCheckpointDetailsView: View {
             }
             .disabled(normalizedURL == nil)
 
-            Button(action: onMakeRequest) {
+Button(action: onMakeRequest) {
                 if isLoading {
                     HStack {
                         ProgressView()
-                        Text("Requesting…")
+                        Text(loadingProgress ?? "Requesting…")
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    Label("Make Request to Website", systemImage: "arrow.up.arrow.down")
+                    Label("Sample Website Response", systemImage: "arrow.up.arrow.down")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
@@ -87,10 +88,11 @@ struct AddCheckpointDetailsView: View {
 
 #Preview {
     NavigationStack {
-        AddCheckpointDetailsView(
+AddCheckpointDetailsView(
             name: .constant("Example"),
             urlString: .constant("https://example.com"),
             isLoading: false,
+            loadingProgress: nil,
             requestError: nil,
             normalizedURL: URL(string: "https://example.com"),
             onMakeRequest: {}

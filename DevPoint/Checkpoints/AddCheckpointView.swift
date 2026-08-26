@@ -21,11 +21,12 @@ struct AddCheckpointView: View {
     @State private var name: String = ""
     @State private var urlString: String = ""
 
-    @State private var isLoading = false
+@State private var isLoading = false
+    @State private var loadingProgress: String?
     @State private var requestError: String?
     @State private var saveError: String?
     @State private var responseResult: URLResponseResult?
-    @State private var ignoredLineNumbers: [Int] = []
+@State private var ignoredLineNumbers: [Int] = []
 
     private var normalizedURL: URL? {
         Self.normalizeURL(from: urlString)
@@ -36,10 +37,11 @@ struct AddCheckpointView: View {
             Group {
                 switch step {
                 case .details:
-                    AddCheckpointDetailsView(
+AddCheckpointDetailsView(
                         name: $name,
                         urlString: $urlString,
                         isLoading: isLoading,
+                        loadingProgress: loadingProgress,
                         requestError: requestError,
                         normalizedURL: normalizedURL,
                         onMakeRequest: {
@@ -95,7 +97,7 @@ struct AddCheckpointView: View {
         return URL(string: "https://\(trimmed)")
     }
 
-    @MainActor
+@MainActor
     private func makeRequest() async {
         guard let url = normalizedURL else {
             requestError = "Enter a valid URL."
@@ -104,18 +106,21 @@ struct AddCheckpointView: View {
 
         isLoading = true
         requestError = nil
-        defer { isLoading = false }
-
-        let result = await requestUrl(url)
-
-        if let errorMessage = result.errorMessage, result.statusCode == -1 {
-            requestError = errorMessage
-            return
+        defer {
+            isLoading = false
+            loadingProgress = nil
         }
 
-        responseResult = result
-        ignoredLineNumbers = []
-        step = .response
+        do {
+            let sample = try await sampleResponseBaseline(from: url) { progress in
+                loadingProgress = progress
+            }
+            responseResult = sample.baseline
+            ignoredLineNumbers = sample.ignoredLineNumbers
+            step = .response
+        } catch {
+            requestError = error.localizedDescription
+        }
     }
 
     private func saveCheckpoint() {

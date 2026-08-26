@@ -13,8 +13,12 @@ struct CheckpointDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
-    @State private var isRefreshing = false
+@State private var isRefreshing = false
     @State private var showBrowser = false
+    @State private var showDeleteConfirmation = false
+    @State private var editedName: String = ""
+    @State private var editedURLString: String = ""
+    @State private var urlEditError: String?
 
     private static let relativeDateFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
@@ -44,18 +48,26 @@ struct CheckpointDetailView: View {
     var body: some View {
         NavigationStack {
 //            ScrollView{
-                Form {
+Form {
+                    editSection
                     overviewSection
                     navigationSection
                 }
 //            }
-            .navigationTitle(checkpoint.name)
+            .navigationTitle(editedName.isEmpty ? checkpoint.name : editedName)
             .navigationSubtitle(
                 "Last Checked: \(Self.relativeDateFormatter.localizedString(for: checkpoint.lastRunDate, relativeTo: Date()))"
             )
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", systemImage: "checkmark") { dismiss() }
+            .onAppear {
+                editedName = checkpoint.name
+                editedURLString = checkpoint.url.absoluteString
+            }
+.toolbar {
+ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", systemImage: "checkmark") {
+                        commitURLEdit()
+                        dismiss()
+                    }
                 }
 
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -71,6 +83,26 @@ struct CheckpointDetailView: View {
                     .disabled(isRefreshing)
                     .accessibilityLabel("Refresh")
                 }
+
+                ToolbarItem(placement: .bottomBar) {
+                    Button("Delete Checkpoint", systemImage: "trash", role: .destructive) {
+                        showDeleteConfirmation = true
+                    }
+                }
+            }
+            .confirmationDialog(
+                "Delete Checkpoint?",
+                isPresented: $showDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    modelContext.delete(checkpoint)
+                    try? modelContext.save()
+                    dismiss()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This removes \"\(checkpoint.name)\" and cannot be undone.")
             }
             .sheet(isPresented: $showBrowser) {
                 InAppBrowserView(url: checkpoint.url)
@@ -78,59 +110,103 @@ struct CheckpointDetailView: View {
         }
     }
 
+private var editSection: some View {
+        Section {
+            TextField("Name", text: $editedName)
+                .textInputAutocapitalization(.words)
+                .onChange(of: editedName) { _, newValue in
+                    let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty, trimmed != checkpoint.name else { return }
+                    checkpoint.name = trimmed
+                    try? modelContext.save()
+                }
+
+            TextField("https://example.com", text: $editedURLString)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onSubmit { commitURLEdit() }
+                .onChange(of: editedURLString) { _, _ in
+                    urlEditError = nil
+                }
+
+            Button {
+                showBrowser = true
+            } label: {
+                Label("Visit Website", systemImage: "safari")
+            }
+
+            if let urlEditError {
+                Text(urlEditError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+        } header: {
+            Text("Checkpoint")
+        } footer: {
+            Text("Name saves as you type. URL saves when you leave the field or tap return.")
+        }
+        .onDisappear {
+            commitURLEdit()
+        }
+    }
+
     private var overviewSection: some View {
-            Section("Overview") {
-                LabeledContent("Health") {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(checkpoint.status.color)
-                            .frame(width: 10, height: 10)
-                            .shadow(
-                                color: checkpoint.status.color.opacity(0.2),
-                                radius: 2
-                            )
+        Section("Overview") {
+            LabeledContent("Health") {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(checkpoint.status.color)
+                        .frame(width: 10, height: 10)
+                        .shadow(
+                            color: checkpoint.status.color.opacity(0.2),
+                            radius: 2
+                        )
 
-                        Text(checkpoint.status.title)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(checkpoint.status.color)
-                    }
+                    Text(checkpoint.status.title)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(checkpoint.status.color)
                 }
+            }
 
-                LabeledContent("URL") {
-                    Button {
-                        showBrowser = true
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "safari")
-                            Text(checkpoint.url.absoluteString)
-                        }
-                    }
-                }
-
-                if !checkpoint.lastResponseTitle.isEmpty {
-                    LabeledContent("Status Code") {
-                        Text(checkpoint.lastResponseStatusCode)
-                            .foregroundStyle(checkpoint.status.color)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.trailing)
-                    }
-                }
-
-                if !checkpoint.lastResponseDescription.isEmpty {
-                    LabeledContent("Details") {
-                        Text(checkpoint.lastResponseDescription)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.trailing)
-                    }
-                }
-
-                LabeledContent("Match Type") {
-                    Text(matchSummary)
-                        .foregroundStyle(matchColor)
+            if !checkpoint.lastResponseTitle.isEmpty {
+                LabeledContent("Status Code") {
+                    Text(checkpoint.lastResponseStatusCode)
+                        .foregroundStyle(checkpoint.status.color)
+                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.trailing)
                 }
-            
+            }
+
+            if !checkpoint.lastResponseDescription.isEmpty {
+                LabeledContent("Details") {
+                    Text(checkpoint.lastResponseDescription)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+
+            LabeledContent("Match Type") {
+                Text(matchSummary)
+                    .foregroundStyle(matchColor)
+                    .multilineTextAlignment(.trailing)
+            }
         }
+    }
+
+    private func commitURLEdit() {
+        guard let url = AddCheckpointView.normalizeURL(from: editedURLString) else {
+            urlEditError = "Enter a valid URL."
+            editedURLString = checkpoint.url.absoluteString
+            return
+        }
+
+        urlEditError = nil
+        editedURLString = url.absoluteString
+
+        guard url != checkpoint.url else { return }
+        checkpoint.url = url
+        try? modelContext.save()
     }
 
     private var navigationSection: some View {
@@ -183,10 +259,13 @@ struct CheckpointDetailView: View {
 
         let result = await requestUrl(checkpoint.url)
 
-        checkpoint.lastResponse = result.body
+checkpoint.lastResponse = result.body
         checkpoint.lastResponseTitle = result.statusCode == -1
             ? (result.errorMessage ?? "Request failed")
             : "HTTP \(result.statusCode)"
+        checkpoint.lastResponseStatusCode = result.statusCode == -1
+            ? "—"
+            : "\(result.statusCode)"
         checkpoint.lastResponseDescription = result.headers["Content-Type"]
             ?? result.headers["content-type"]
             ?? result.errorMessage
