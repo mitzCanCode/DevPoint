@@ -12,20 +12,32 @@ struct CheckpointDetailView: View {
     @Bindable var checkpoint: WebsiteCheckpoint
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-
-@State private var isRefreshing = false
+    
+    @State private var isRefreshing = false
     @State private var showBrowser = false
     @State private var showDeleteConfirmation = false
     @State private var editedName: String = ""
     @State private var editedURLString: String = ""
     @State private var urlEditError: String?
+    
+    @State private var now = Date()
+    
+    private var navigationSubtitle: String {
+        let elapsed = now.timeIntervalSince(checkpoint.lastRunDate)
 
+        if elapsed < 60 {
+            return "Last Checked: Now"
+        }
+
+        return "Last Checked: \(Self.relativeDateFormatter.localizedString( for: checkpoint.lastRunDate, relativeTo: now ))"
+    }
+    
     private static let relativeDateFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         return formatter
     }()
-
+    
     private var matchKind: ResponseMatchKind {
         compareResponses(
             expected: checkpoint.expectedResponse,
@@ -33,7 +45,7 @@ struct CheckpointDetailView: View {
             ignoredLineNumbers: checkpoint.ignoredLineNumbers
         )
     }
-
+    
     private var ignoredLinesBinding: Binding<[Int]> {
         Binding(
             get: { checkpoint.ignoredLineNumbers },
@@ -44,32 +56,30 @@ struct CheckpointDetailView: View {
             }
         )
     }
-
+    
     var body: some View {
         NavigationStack {
-//            ScrollView{
-Form {
-                    editSection
-                    overviewSection
-                    navigationSection
-                }
-//            }
+            //            ScrollView{
+            Form {
+                editSection
+                overviewSection
+                navigationSection
+            }
+            //            }
             .navigationTitle(editedName.isEmpty ? checkpoint.name : editedName)
-            .navigationSubtitle(
-                "Last Checked: \(Self.relativeDateFormatter.localizedString(for: checkpoint.lastRunDate, relativeTo: Date()))"
-            )
+            .navigationSubtitle(navigationSubtitle)
             .onAppear {
                 editedName = checkpoint.name
                 editedURLString = checkpoint.url.absoluteString
             }
-.toolbar {
-ToolbarItem(placement: .confirmationAction) {
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Done", systemImage: "checkmark") {
                         commitURLEdit()
                         dismiss()
                     }
                 }
-
+                
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
                         Task { await refresh() }
@@ -83,8 +93,8 @@ ToolbarItem(placement: .confirmationAction) {
                     .disabled(isRefreshing)
                     .accessibilityLabel("Refresh")
                 }
-
-                ToolbarItem(placement: .bottomBar) {
+                
+                ToolbarItem(placement: .destructiveAction) {
                     Button("Delete Checkpoint", systemImage: "trash", role: .destructive) {
                         showDeleteConfirmation = true
                     }
@@ -108,9 +118,15 @@ ToolbarItem(placement: .confirmationAction) {
                 InAppBrowserView(url: checkpoint.url)
             }
         }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                now = Date()
+            }
+        }
     }
-
-private var editSection: some View {
+    
+    private var editSection: some View {
         Section {
             TextField("Name", text: $editedName)
                 .textInputAutocapitalization(.words)
@@ -120,7 +136,7 @@ private var editSection: some View {
                     checkpoint.name = trimmed
                     try? modelContext.save()
                 }
-
+            
             TextField("https://example.com", text: $editedURLString)
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
@@ -129,13 +145,13 @@ private var editSection: some View {
                 .onChange(of: editedURLString) { _, _ in
                     urlEditError = nil
                 }
-
+            
             Button {
                 showBrowser = true
             } label: {
                 Label("Visit Website", systemImage: "safari")
             }
-
+            
             if let urlEditError {
                 Text(urlEditError)
                     .font(.footnote)
@@ -150,7 +166,7 @@ private var editSection: some View {
             commitURLEdit()
         }
     }
-
+    
     private var overviewSection: some View {
         Section("Overview") {
             LabeledContent("Health") {
@@ -162,13 +178,13 @@ private var editSection: some View {
                             color: checkpoint.status.color.opacity(0.2),
                             radius: 2
                         )
-
+                    
                     Text(checkpoint.status.title)
                         .fontWeight(.semibold)
                         .foregroundStyle(checkpoint.status.color)
                 }
             }
-
+            
             if !checkpoint.lastResponseTitle.isEmpty {
                 LabeledContent("Status Code") {
                     Text(checkpoint.lastResponseStatusCode)
@@ -177,7 +193,13 @@ private var editSection: some View {
                         .multilineTextAlignment(.trailing)
                 }
             }
-
+            
+            LabeledContent("Match Type") {
+                Text(matchSummary)
+                    .foregroundStyle(matchColor)
+                    .multilineTextAlignment(.trailing)
+            }
+            
             if !checkpoint.lastResponseDescription.isEmpty {
                 LabeledContent("Details") {
                     Text(checkpoint.lastResponseDescription)
@@ -185,30 +207,24 @@ private var editSection: some View {
                         .multilineTextAlignment(.trailing)
                 }
             }
-
-            LabeledContent("Match Type") {
-                Text(matchSummary)
-                    .foregroundStyle(matchColor)
-                    .multilineTextAlignment(.trailing)
-            }
         }
     }
-
+    
     private func commitURLEdit() {
         guard let url = AddCheckpointView.normalizeURL(from: editedURLString) else {
             urlEditError = "Enter a valid URL."
             editedURLString = checkpoint.url.absoluteString
             return
         }
-
+        
         urlEditError = nil
         editedURLString = url.absoluteString
-
+        
         guard url != checkpoint.url else { return }
         checkpoint.url = url
         try? modelContext.save()
     }
-
+    
     private var navigationSection: some View {
         Section("Responses") {
             NavigationLink {
@@ -216,7 +232,7 @@ private var editSection: some View {
             } label: {
                 Label("Latest Response", systemImage: "arrow.left.arrow.right")
             }
-
+            
             NavigationLink {
                 CheckpointExpectedResponseView(
                     checkpoint: checkpoint,
@@ -227,7 +243,7 @@ private var editSection: some View {
             }
         }
     }
-
+    
     private var matchSummary: String {
         switch matchKind {
         case .exact:
@@ -238,7 +254,7 @@ private var editSection: some View {
             return "Mismatch"
         }
     }
-
+    
     private var matchColor: Color {
         switch matchKind {
         case .exact:
@@ -249,27 +265,27 @@ private var editSection: some View {
             return .orange
         }
     }
-
+    
     @MainActor
     private func refresh() async {
         guard !isRefreshing else { return }
-
+        
         isRefreshing = true
         defer { isRefreshing = false }
-
+        
         let result = await requestUrl(checkpoint.url)
-
-checkpoint.lastResponse = result.body
+        
+        checkpoint.lastResponse = result.body
         checkpoint.lastResponseTitle = result.statusCode == -1
-            ? (result.errorMessage ?? "Request failed")
-            : "HTTP \(result.statusCode)"
+        ? (result.errorMessage ?? "Request failed")
+        : "HTTP \(result.statusCode)"
         checkpoint.lastResponseStatusCode = result.statusCode == -1
-            ? "—"
-            : "\(result.statusCode)"
+        ? "—"
+        : "\(result.statusCode)"
         checkpoint.lastResponseDescription = result.headers["Content-Type"]
-            ?? result.headers["content-type"]
-            ?? result.errorMessage
-            ?? ""
+        ?? result.headers["content-type"]
+        ?? result.errorMessage
+        ?? ""
         checkpoint.lastRunDate = Date()
         checkpoint.status = determineCheckpointStatus(
             statusCode: result.statusCode,
@@ -297,7 +313,7 @@ checkpoint.lastResponse = result.body
     checkpoint.lastResponseTitle = "HTTP 200"
     checkpoint.lastResponseDescription = "application/json"
     checkpoint.status = .responseMismatch
-
+    
     return CheckpointDetailView(checkpoint: checkpoint)
         .modelContainer(for: WebsiteCheckpoint.self, inMemory: true)
 }

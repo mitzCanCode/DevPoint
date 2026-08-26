@@ -20,24 +20,6 @@ struct CheckpointExpectedResponseView: View {
 
     var body: some View {
         List {
-            Section {
-                Button {
-                    showResetConfirmation = true
-                } label: {
-                    if isResetting {
-                        HStack {
-                            ProgressView()
-                            Text(resetProgress ?? "Resetting…")
-                        }
-                    } else {
-                        Label("Reset Expected Response", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                }
-                .disabled(isResetting)
-            } footer: {
-                Text("Fetches the site four times one second apart, replaces the expected baseline with the first sample, and auto-ignores lines that changed.")
-            }
-
             IgnoredLinesEditor(
                 text: checkpoint.expectedResponse,
                 ignoredLineNumbers: $ignoredLineNumbers,
@@ -49,25 +31,39 @@ struct CheckpointExpectedResponseView: View {
         }
         .navigationTitle("Expected Response")
         .navigationSubtitle("\(ignoredLineNumbers.count) \(ignoredLineNumbers.count == 1 ? "line" : "lines") ignored")
-        .confirmationDialog(
-            "Reset Expected Response?",
-            isPresented: $showResetConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Reset", role: .destructive) {
-                Task { await resetExpectedResponse() }
+        .toolbar {
+            ToolbarItem(placement: .destructiveAction) {
+                Button(action: {
+                    showResetConfirmation = true
+                }) {
+                    if isResetting {
+                            ProgressView()
+                    } else {
+                        Label("Reset Expected Response", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                }
+                .confirmationDialog(
+                    "Reset Expected Response?",
+                    isPresented: $showResetConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Reset", role: .destructive) {
+                        Task { await resetExpectedResponse() }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This replaces the current expected response and ignored lines using fresh samples from the site.")
+                }
+                .alert("Couldn't Reset Expected Response", isPresented: Binding(
+                    get: { resetError != nil },
+                    set: { if !$0 { resetError = nil } }
+                )) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(resetError ?? "Unknown error")
+                }
+                .disabled(isResetting)
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This replaces the current expected response and ignored lines using fresh samples from the site.")
-        }
-        .alert("Couldn't Reset Expected Response", isPresented: Binding(
-            get: { resetError != nil },
-            set: { if !$0 { resetError = nil } }
-        )) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(resetError ?? "Unknown error")
         }
     }
 
