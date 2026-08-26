@@ -19,6 +19,7 @@ struct DevPointApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .tint(Color.accentColor)
         }
         .modelContainer(modelContainer)
     }
