@@ -20,9 +20,7 @@ struct AddCheckpointResponseView: View {
 
             IgnoredLinesEditor(
                 text: result.body,
-                ignoredLineNumbers: $ignoredLineNumbers,
-                title: "Response Body",
-                footer: "Tap a line number row to ignore it in future checks (for example line 50 only). Ignored lines are grayed out and skipped during comparison."
+                ignoredLineNumbers: $ignoredLineNumbers
             )
 
             if !result.headers.isEmpty {

@@ -67,6 +67,7 @@ struct CheckpointDiffView: View {
             .diffConfiguration(DiffConfiguration.mobile.with(theme: theme))
             .diffWordWrap(true)
             .diffFileHeaders(false)
+            .diffHunkHeaders(false)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .id(colorScheme) // force refresh when appearance changes
     }
@@ -79,9 +80,7 @@ struct CheckpointDiffView: View {
 
         unifiedDiff = UnifiedDiffBuilder.make(
             oldText: checkpoint.expectedResponse,
-            newText: checkpoint.lastResponse,
-            oldName: "expected",
-            newName: "Latest Response"
+            newText: checkpoint.lastResponse
         )
     }
 }

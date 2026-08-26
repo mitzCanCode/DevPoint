@@ -15,7 +15,6 @@ struct IgnoredLinesEditor: View {
     @Binding var ignoredLineNumbers: [Int]
     /// Optional 1-based lines to subtly highlight as currently differing.
     var differingLineNumbers: Set<Int> = []
-    var title: String = "Response Lines"
     var footer: String = "Tap a line to ignore it during mismatch checks. Ignored lines are grayed out."
 
     private var lines: [String] {
@@ -33,7 +32,7 @@ struct IgnoredLinesEditor: View {
                     .foregroundStyle(.secondary)
                     .italic()
             } else {
-                VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
                         let lineNumber = index + 1
                         let isIgnored = ignoredSet.contains(lineNumber)
@@ -57,7 +56,7 @@ struct IgnoredLinesEditor: View {
                                     .multilineTextAlignment(.leading)
                             }
                             .padding(.vertical, 5)
-                            .padding(.horizontal, 8)
+//                            .padding(.horizontal, 8)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(rowBackground(isIgnored: isIgnored, isDiffering: isDiffering))
                             .contentShape(Rectangle())
@@ -66,22 +65,7 @@ struct IgnoredLinesEditor: View {
                         .accessibilityLabel(accessibilityLabel(lineNumber: lineNumber, line: line, isIgnored: isIgnored))
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
-                )
-                .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-            }
-        } header: {
-            HStack {
-                Text(title)
-                Spacer()
-                if !ignoredLineNumbers.isEmpty {
-                    Text("\(ignoredLineNumbers.count) ignored")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 12))
             }
         } footer: {
             Text(footer)

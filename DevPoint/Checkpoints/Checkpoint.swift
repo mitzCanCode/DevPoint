@@ -74,6 +74,8 @@ final class WebsiteCheckpoint {
     var url: URL
     var expectedResponse: String
     var lastResponseTitle: String
+    var lastResponseStatusCode: String
+    
     var lastResponseDescription: String
     var lastResponse: String
     /// 1-based line numbers in the response body to exclude from mismatch checks.
@@ -93,6 +95,7 @@ final class WebsiteCheckpoint {
         self.expectedResponse = expectedResponse
 
         self.lastResponseTitle = ""
+        self.lastResponseStatusCode = ""
         self.lastResponseDescription = ""
         self.lastResponse = ""
         self.ignoredLineNumbers = []

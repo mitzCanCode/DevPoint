@@ -12,18 +12,14 @@ import Foundation
 enum UnifiedDiffBuilder {
     static func make(
         oldText: String,
-        newText: String,
-        oldName: String,
-        newName: String
+        newText: String
     ) -> String {
         let oldLines = lines(from: oldText)
         let newLines = lines(from: newText)
         let edits = myersDiff(old: oldLines, new: newLines)
 
         var body = ""
-        body += "diff --git a/\(oldName) b/\(newName)\n"
-        body += "--- a/\(oldName)\n"
-        body += "+++ b/\(newName)\n"
+        body += "diff --git a/ b/\n"
 
         let oldCount = oldLines.count
         let newCount = newLines.count

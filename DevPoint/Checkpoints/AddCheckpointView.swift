@@ -132,6 +132,7 @@ struct AddCheckpointView: View {
         )
         checkpoint.lastResponse = result.body
         checkpoint.lastResponseTitle = "HTTP \(result.statusCode)"
+        checkpoint.lastResponseStatusCode = "\(result.statusCode)"
         checkpoint.lastResponseDescription = result.headers["Content-Type"]
             ?? result.headers["content-type"]
             ?? ""

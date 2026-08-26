@@ -43,22 +43,22 @@ struct CheckpointDetailView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView{
-                VStack {
+//            ScrollView{
+                Form {
                     overviewSection
                     navigationSection
                 }
-            }
+//            }
             .navigationTitle(checkpoint.name)
             .navigationSubtitle(
                 "Last Checked: \(Self.relativeDateFormatter.localizedString(for: checkpoint.lastRunDate, relativeTo: Date()))"
             )
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", systemImage: "checkmark") { dismiss() }
                 }
 
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button {
                         Task { await refresh() }
                     } label: {
@@ -71,14 +71,6 @@ struct CheckpointDetailView: View {
                     .disabled(isRefreshing)
                     .accessibilityLabel("Refresh")
                 }
-
-                ToolbarItem(placement: .bottomBar) {
-                    Button {
-                        showBrowser = true
-                    } label: {
-                        Label("Open Website", systemImage: "safari")
-                    }
-                }
             }
             .sheet(isPresented: $showBrowser) {
                 InAppBrowserView(url: checkpoint.url)
@@ -87,63 +79,57 @@ struct CheckpointDetailView: View {
     }
 
     private var overviewSection: some View {
-        Section("Overview") {
-            HStack {
-                Circle()
-                    .fill(checkpoint.status.color)
-                    .frame(width: 10, height: 10)
-                Text(checkpoint.status.title)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(checkpoint.status.color)
-            }
+            Section("Overview") {
+                LabeledContent("Health") {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(checkpoint.status.color)
+                            .frame(width: 10, height: 10)
+                            .shadow(
+                                color: checkpoint.status.color.opacity(0.2),
+                                radius: 2
+                            )
 
-            LabeledContent("URL") {
-                Text(checkpoint.url.absoluteString)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.trailing)
-                    .textSelection(.enabled)
-            }
+                        Text(checkpoint.status.title)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(checkpoint.status.color)
+                    }
+                }
 
-            LabeledContent("Last Checked") {
-                Text(
-                    Self.relativeDateFormatter.localizedString(
-                        for: checkpoint.lastRunDate,
-                        relativeTo: Date()
-                    )
-                )
-                .foregroundStyle(.secondary)
-            }
+                LabeledContent("URL") {
+                    Button {
+                        showBrowser = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "safari")
+                            Text(checkpoint.url.absoluteString)
+                        }
+                    }
+                }
 
-            if !checkpoint.lastResponseTitle.isEmpty {
-                LabeledContent("Result") {
-                    Text(checkpoint.lastResponseTitle)
-                        .foregroundStyle(.secondary)
+                if !checkpoint.lastResponseTitle.isEmpty {
+                    LabeledContent("Status Code") {
+                        Text(checkpoint.lastResponseStatusCode)
+                            .foregroundStyle(checkpoint.status.color)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+
+                if !checkpoint.lastResponseDescription.isEmpty {
+                    LabeledContent("Details") {
+                        Text(checkpoint.lastResponseDescription)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+
+                LabeledContent("Match Type") {
+                    Text(matchSummary)
+                        .foregroundStyle(matchColor)
                         .multilineTextAlignment(.trailing)
                 }
-            }
-
-            if !checkpoint.lastResponseDescription.isEmpty {
-                LabeledContent("Details") {
-                    Text(checkpoint.lastResponseDescription)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.trailing)
-                }
-            }
-
-            LabeledContent("Match") {
-                Text(matchSummary)
-                    .foregroundStyle(matchColor)
-                    .multilineTextAlignment(.trailing)
-            }
-
-            if !checkpoint.ignoredLineNumbers.isEmpty {
-                LabeledContent("Ignored Lines") {
-                    Text(checkpoint.ignoredLineNumbers.map(String.init).joined(separator: ", "))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.trailing)
-                }
-            }
+            
         }
     }
 
