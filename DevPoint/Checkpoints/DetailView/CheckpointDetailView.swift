@@ -73,46 +73,32 @@ struct CheckpointDetailView: View {
                 editedURLString = checkpoint.url.absoluteString
             }
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", systemImage: "checkmark") {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close", systemImage: "xmark") {
                         commitURLEdit()
                         dismiss()
                     }
-                }
-                
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        Task { await refresh() }
-                    } label: {
-                        if isRefreshing {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                    }
-                    .disabled(isRefreshing)
-                    .accessibilityLabel("Refresh")
                 }
                 
                 ToolbarItem(placement: .destructiveAction) {
                     Button("Delete Checkpoint", systemImage: "trash", role: .destructive) {
                         showDeleteConfirmation = true
                     }
+                    .confirmationDialog(
+                        "Delete Checkpoint?",
+                        isPresented: $showDeleteConfirmation,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete", role: .destructive) {
+                            modelContext.delete(checkpoint)
+                            try? modelContext.save()
+                            dismiss()
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("This removes \"\(checkpoint.name)\" and cannot be undone.")
+                    }
                 }
-            }
-            .confirmationDialog(
-                "Delete Checkpoint?",
-                isPresented: $showDeleteConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Delete", role: .destructive) {
-                    modelContext.delete(checkpoint)
-                    try? modelContext.save()
-                    dismiss()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This removes \"\(checkpoint.name)\" and cannot be undone.")
             }
             .sheet(isPresented: $showBrowser) {
                 InAppBrowserView(url: checkpoint.url)
@@ -160,7 +146,7 @@ struct CheckpointDetailView: View {
         } header: {
             Text("Checkpoint")
         } footer: {
-            Text("Name saves as you type. URL saves when you leave the field or tap return.")
+            Text("Details about this checkpoint and the website it represents.")
         }
         .onDisappear {
             commitURLEdit()
@@ -168,7 +154,7 @@ struct CheckpointDetailView: View {
     }
     
     private var overviewSection: some View {
-        Section("Overview") {
+        Section {
             LabeledContent("Health") {
                 HStack(spacing: 6) {
                     Circle()
@@ -207,9 +193,13 @@ struct CheckpointDetailView: View {
                         .multilineTextAlignment(.trailing)
                 }
             }
+        } header: {
+            Text("Overview")
+        } footer: {
+            Text("A summary of the checkpoint's current status and latest results.")
         }
     }
-    
+
     private func commitURLEdit() {
         guard let url = AddCheckpointView.normalizeURL(from: editedURLString) else {
             urlEditError = "Enter a valid URL."
@@ -226,7 +216,14 @@ struct CheckpointDetailView: View {
     }
     
     private var navigationSection: some View {
-        Section("Responses") {
+        Section {
+            
+            NavigationLink {
+                CheckpointHeadersView(checkpoint: checkpoint)
+            } label: {
+                Label("Headers", systemImage: "list.bullet.rectangle")
+            }
+            
             NavigationLink {
                 CheckpointDiffView(checkpoint: checkpoint)
             } label: {
@@ -241,6 +238,10 @@ struct CheckpointDetailView: View {
             } label: {
                 Label("Expected Response", systemImage: "doc.text")
             }
+        } header: {
+            Text("Responses")
+        }  footer: {
+            Text("Detailed information about the responses received from the website.")
         }
     }
     
@@ -274,21 +275,9 @@ struct CheckpointDetailView: View {
         defer { isRefreshing = false }
         
         let result = await requestUrl(checkpoint.url)
-        
-        checkpoint.lastResponse = result.body
-        checkpoint.lastResponseTitle = result.statusCode == -1
-        ? (result.errorMessage ?? "Request failed")
-        : "HTTP \(result.statusCode)"
-        checkpoint.lastResponseStatusCode = result.statusCode == -1
-        ? "—"
-        : "\(result.statusCode)"
-        checkpoint.lastResponseDescription = result.headers["Content-Type"]
-        ?? result.headers["content-type"]
-        ?? result.errorMessage
-        ?? ""
-        checkpoint.lastRunDate = Date()
-        checkpoint.status = determineCheckpointStatus(
-            statusCode: result.statusCode,
+
+        checkpoint.applyResponseResult(
+            result,
             match: compareResponses(
                 expected: checkpoint.expectedResponse,
                 actual: result.body,

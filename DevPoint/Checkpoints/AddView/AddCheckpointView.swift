@@ -135,18 +135,12 @@ AddCheckpointDetailsView(
             url: url,
             expectedResponse: result.body
         )
-        checkpoint.lastResponse = result.body
-        checkpoint.lastResponseTitle = "HTTP \(result.statusCode)"
-        checkpoint.lastResponseStatusCode = "\(result.statusCode)"
-        checkpoint.lastResponseDescription = result.headers["Content-Type"]
-            ?? result.headers["content-type"]
-            ?? ""
         checkpoint.ignoredLineNumbers = ignoredLineNumbers
-        checkpoint.status = determineCheckpointStatus(
-            statusCode: result.statusCode,
-            match: .exact
+        checkpoint.applyResponseResult(
+            result,
+            match: .exact,
+            updateExpectedHeaders: true
         )
-        checkpoint.lastRunDate = Date()
 
         modelContext.insert(checkpoint)
 

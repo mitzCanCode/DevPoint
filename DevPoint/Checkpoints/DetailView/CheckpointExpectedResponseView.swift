@@ -85,22 +85,11 @@ struct CheckpointExpectedResponseView: View {
             let result = sample.baseline
 
             checkpoint.expectedResponse = result.body
-            checkpoint.lastResponse = result.body
-            checkpoint.lastResponseTitle = result.statusCode == -1
-                ? (result.errorMessage ?? "Request failed")
-                : "HTTP \(result.statusCode)"
-            checkpoint.lastResponseStatusCode = result.statusCode == -1
-                ? "—"
-                : "\(result.statusCode)"
-            checkpoint.lastResponseDescription = result.headers["Content-Type"]
-                ?? result.headers["content-type"]
-                ?? result.errorMessage
-                ?? ""
-            checkpoint.lastRunDate = Date()
             ignoredLineNumbers = sample.ignoredLineNumbers
-            checkpoint.status = determineCheckpointStatus(
-                statusCode: result.statusCode,
-                match: .exact
+            checkpoint.applyResponseResult(
+                result,
+                match: .exact,
+                updateExpectedHeaders: true
             )
             try? modelContext.save()
         } catch {

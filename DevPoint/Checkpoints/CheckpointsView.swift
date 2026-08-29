@@ -131,21 +131,9 @@ struct CheckpointsView: View {
     @MainActor
     private func refresh(_ checkpoint: WebsiteCheckpoint) async {
         let result = await requestUrl(checkpoint.url)
-        
-        checkpoint.lastResponse = result.body
-        checkpoint.lastResponseTitle = result.statusCode == -1
-        ? (result.errorMessage ?? "Request failed")
-        : "HTTP \(result.statusCode)"
-        checkpoint.lastResponseStatusCode = result.statusCode == -1
-        ? "—"
-        : "\(result.statusCode)"
-        checkpoint.lastResponseDescription = result.headers["Content-Type"]
-        ?? result.headers["content-type"]
-        ?? result.errorMessage
-        ?? ""
-        checkpoint.lastRunDate = Date()
-        checkpoint.status = determineCheckpointStatus(
-            statusCode: result.statusCode,
+
+        checkpoint.applyResponseResult(
+            result,
             match: compareResponses(
                 expected: checkpoint.expectedResponse,
                 actual: result.body,

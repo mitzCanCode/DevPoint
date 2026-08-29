@@ -78,8 +78,22 @@ final class WebsiteCheckpoint {
     
     var lastResponseDescription: String
     var lastResponse: String
+    /// JSON-encoded `[String: String]` of the latest response headers.
+    var lastResponseHeadersJSON: String = "{}"
+    /// JSON-encoded `[String: String]` of the baseline/expected response headers.
+    var expectedResponseHeadersJSON: String = "{}"
     /// 1-based line numbers in the response body to exclude from mismatch checks.
     var ignoredLineNumbers: [Int] = []
+
+    var lastResponseHeaders: [String: String] {
+        get { Self.decodeHeaders(lastResponseHeadersJSON) }
+        set { lastResponseHeadersJSON = Self.encodeHeaders(newValue) }
+    }
+
+    var expectedResponseHeaders: [String: String] {
+        get { Self.decodeHeaders(expectedResponseHeadersJSON) }
+        set { expectedResponseHeadersJSON = Self.encodeHeaders(newValue) }
+    }
 
     init(
         name: String,
@@ -98,7 +112,59 @@ final class WebsiteCheckpoint {
         self.lastResponseStatusCode = ""
         self.lastResponseDescription = ""
         self.lastResponse = ""
+        self.lastResponseHeadersJSON = "{}"
+        self.expectedResponseHeadersJSON = "{}"
         self.ignoredLineNumbers = []
+    }
+
+    /// Writes status/body/header fields from a live request result.
+    func applyResponseResult(
+        _ result: URLResponseResult,
+        match: ResponseMatchKind? = nil,
+        updateExpectedHeaders: Bool = false
+    ) {
+        lastResponse = result.body
+        lastResponseTitle = result.statusCode == -1
+            ? (result.errorMessage ?? "Request failed")
+            : "HTTP \(result.statusCode)"
+        lastResponseStatusCode = result.statusCode == -1
+            ? "—"
+            : "\(result.statusCode)"
+        lastResponseDescription = result.headers["Content-Type"]
+            ?? result.headers["content-type"]
+            ?? result.errorMessage
+            ?? ""
+        lastResponseHeaders = result.headers
+        if updateExpectedHeaders {
+            expectedResponseHeaders = result.headers
+        }
+        lastRunDate = Date()
+
+        if let match {
+            status = determineCheckpointStatus(statusCode: result.statusCode, match: match)
+        } else {
+            recomputeStatus(statusCode: result.statusCode)
+        }
+    }
+
+    private static func encodeHeaders(_ headers: [String: String]) -> String {
+        guard JSONSerialization.isValidJSONObject(headers),
+              let data = try? JSONSerialization.data(withJSONObject: headers, options: [.sortedKeys]),
+              let string = String(data: data, encoding: .utf8)
+        else {
+            return "{}"
+        }
+        return string
+    }
+
+    private static func decodeHeaders(_ json: String) -> [String: String] {
+        guard let data = json.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              let headers = object as? [String: String]
+        else {
+            return [:]
+        }
+        return headers
     }
 
     func recomputeStatus(statusCode: Int? = nil) {
