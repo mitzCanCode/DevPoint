@@ -21,11 +21,16 @@ struct AddCheckpointResponseView: View {
             if !result.headers.isEmpty {
                 headersSection
             }
-            
-            IgnoredLinesEditor(
-                text: result.body,
-                ignoredLineNumbers: $ignoredLineNumbers
-            )
+            Section {
+                IgnoredLinesEditor(
+                    text: result.body,
+                    ignoredLineNumbers: $ignoredLineNumbers
+                )
+            } header: {
+                Text("Body")
+            } footer: {
+                Text("Tap a line to ignore it during mismatch checks. Ignored lines are grayed out.")
+            }
         }
         .navigationTitle("Overview")
         .navigationSubtitle("Please review the sample response before saving the checkpoint.")

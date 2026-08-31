@@ -20,14 +20,20 @@ struct CheckpointExpectedResponseView: View {
 
     var body: some View {
         List {
-            IgnoredLinesEditor(
-                text: checkpoint.expectedResponse,
-                ignoredLineNumbers: $ignoredLineNumbers,
-                differingLineNumbers: differingLineNumbers(
-                    expected: checkpoint.expectedResponse,
-                    actual: checkpoint.lastResponse
+            Section {
+                IgnoredLinesEditor(
+                    text: checkpoint.expectedResponse,
+                    ignoredLineNumbers: $ignoredLineNumbers,
+                    differingLineNumbers: differingLineNumbers(
+                        expected: checkpoint.expectedResponse,
+                        actual: checkpoint.lastResponse
+                    )
                 )
-            )
+            } header: {
+                Text("Body")
+            } footer: {
+                Text("Tap a line to ignore it during mismatch checks. Ignored lines are grayed out.")
+            }
         }
         .navigationTitle("Expected Response")
         .navigationSubtitle("\(ignoredLineNumbers.count) \(ignoredLineNumbers.count == 1 ? "line" : "lines") ignored")
