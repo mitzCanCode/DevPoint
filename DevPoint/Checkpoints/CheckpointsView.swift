@@ -67,6 +67,9 @@ struct CheckpointsView: View {
                         }
                         .onDelete(perform: deleteCheckpoints)
                     }
+                    .refreshable {
+                        await refreshAllCheckpoints(force: true)
+                    }
                 }
             }
             .navigationTitle("Checkpoints")
@@ -85,9 +88,6 @@ struct CheckpointsView: View {
             }
             .sheet(item: $selectedCheckpoint) { checkpoint in
                 CheckpointDetailView(checkpoint: checkpoint)
-            }
-            .refreshable {
-                await refreshAllCheckpoints(force: true)
             }
             .onAppear {
                 Task {

@@ -66,6 +66,9 @@ struct CheckpointDetailView: View {
                 navigationSection
             }
             //            }
+            .refreshable {
+                await refresh()
+            }
             .navigationTitle(editedName.isEmpty ? checkpoint.name : editedName)
             .navigationSubtitle(navigationSubtitle)
             .onAppear {
@@ -73,7 +76,7 @@ struct CheckpointDetailView: View {
                 editedURLString = checkpoint.url.absoluteString
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Close", systemImage: "xmark") {
                         commitURLEdit()
                         dismiss()

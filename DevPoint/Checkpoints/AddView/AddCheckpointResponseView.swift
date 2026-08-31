@@ -13,51 +13,55 @@ struct AddCheckpointResponseView: View {
     let result: URLResponseResult
     @Binding var ignoredLineNumbers: [Int]
     let onSave: () -> Void
-
+    
     var body: some View {
         Form {
             overviewSection
-
+            
+            if !result.headers.isEmpty {
+                headersSection
+            }
+            
             IgnoredLinesEditor(
                 text: result.body,
                 ignoredLineNumbers: $ignoredLineNumbers
             )
-
-            if !result.headers.isEmpty {
-                headersSection
+        }
+        .navigationTitle("Overview")
+        .navigationSubtitle("Please review the sample response before saving the checkpoint.")
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button(action: onSave) {
+                    Label("Save Checkpoint", systemImage: "checkmark")
+                }
+                .disabled(result.statusCode < 200 || result.statusCode >= 300)
             }
-
-            saveSection
         }
     }
-
+    
     private var overviewSection: some View {
         Section {
-            ResponseStatusBadge(statusCode: result.statusCode)
-
-            LabeledContent("Status Code") {
-                Text("\(result.statusCode)")
-                    .fontWeight(.semibold)
-                    .foregroundStyle(ResponseStatusBadge.color(for: result.statusCode))
-            }
-
             LabeledContent("Name") {
                 Text(name)
                     .foregroundStyle(.secondary)
             }
-
+            
             LabeledContent("URL") {
                 Text(url.absoluteString)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .multilineTextAlignment(.trailing)
             }
+            
+            LabeledContent("Response Status") {
+                ResponseStatusBadge(statusCode: result.statusCode)
+            }
         } header: {
             Text("Overview")
         }
     }
-
-
+    
+    
     private var headersSection: some View {
         Section("Headers") {
             ForEach(result.headers.keys.sorted(), id: \.self) { key in
@@ -68,32 +72,11 @@ struct AddCheckpointResponseView: View {
             }
         }
     }
-
-    private var saveSection: some View {
-        Section {
-            Button(action: onSave) {
-                Label("Save Checkpoint", systemImage: "checkmark.circle.fill")
-                    .frame(maxWidth: .infinity)
-                    .fontWeight(.semibold)
-            }
-            .buttonStyle(.borderedProminent)
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-            .listRowBackground(Color.clear)
-} footer: {
-            Text("This first sample becomes the expected baseline. Lines that changed across the four samples are pre-selected as ignored.")
-        }
-    }
 }
 
 struct ResponseStatusBadge: View {
     let statusCode: Int
-
-    var body: some View {
-        Label(title, systemImage: icon)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(Self.color(for: statusCode))
-    }
-
+    
     private var title: String {
         switch statusCode {
         case 200...299: return "Success"
@@ -103,7 +86,7 @@ struct ResponseStatusBadge: View {
         default: return "Unknown"
         }
     }
-
+    
     private var icon: String {
         switch statusCode {
         case 200...299: return "checkmark.seal.fill"
@@ -113,7 +96,15 @@ struct ResponseStatusBadge: View {
         default: return "questionmark.circle.fill"
         }
     }
-
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(Image(systemName: icon))
+            Text("\(title) (\(statusCode))")
+        }
+        .foregroundStyle(Self.color(for: statusCode))
+    }
+    
     static func color(for code: Int) -> Color {
         switch code {
         case 200...299: return .green
@@ -128,7 +119,7 @@ struct ResponseStatusBadge: View {
 struct ResponseHeaderRow: View {
     let key: String
     let value: String
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(key)

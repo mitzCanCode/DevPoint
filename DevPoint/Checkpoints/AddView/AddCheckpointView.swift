@@ -8,71 +8,113 @@
 import SwiftUI
 import SwiftData
 
-enum AddCheckpointStep {
-    case details
-    case response
-}
-
 struct AddCheckpointView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-
-    @State private var step: AddCheckpointStep = .details
+    
     @State private var name: String = ""
     @State private var urlString: String = ""
-
-@State private var isLoading = false
+    
+    @State private var isLoading = false
     @State private var loadingProgress: String?
     @State private var requestError: String?
     @State private var saveError: String?
     @State private var responseResult: URLResponseResult?
-@State private var ignoredLineNumbers: [Int] = []
-
+    @State private var ignoredLineNumbers: [Int] = []
+    @State private var nextStep: Bool = false
+    
     private var normalizedURL: URL? {
         Self.normalizeURL(from: urlString)
     }
-
+    
+    @State private var showBrowser = false
+    
+    private var canMakeRequest: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && normalizedURL != nil
+    }
+    
     var body: some View {
         NavigationStack {
-            Group {
-                switch step {
-                case .details:
-AddCheckpointDetailsView(
-                        name: $name,
-                        urlString: $urlString,
-                        isLoading: isLoading,
-                        loadingProgress: loadingProgress,
-                        requestError: requestError,
-                        normalizedURL: normalizedURL,
-                        onMakeRequest: {
-                            Task { await makeRequest() }
-                        }
-                    )
-                case .response:
-                    if let responseResult, let normalizedURL {
-                        AddCheckpointResponseView(
-                            name: name,
-                            url: normalizedURL,
-                            result: responseResult,
-                            ignoredLineNumbers: $ignoredLineNumbers,
-                            onSave: saveCheckpoint
-                        )
+            Form {
+                Section {
+                    TextField("Name", text: $name)
+                        .textInputAutocapitalization(.words)
+                    
+                    TextField("https://example.com", text: $urlString)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("Checkpoint Details")
+                } footer: {
+                    Text("Enter a name and URL, then open the site or sample the live response. Four requests are made one second apart so fluctuating lines can be ignored automatically.")
+                }
+                
+
+                
+                if let requestError {
+                    Section {
+                        Label(requestError, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                            .font(.subheadline)
                     }
                 }
             }
-            .navigationTitle(step == .details ? "New Checkpoint" : "Review Response")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(isPresented: $nextStep) {
+                if let responseResult, let normalizedURL {
+                    AddCheckpointResponseView(
+                        name: name,
+                        url: normalizedURL,
+                        result: responseResult,
+                        ignoredLineNumbers: $ignoredLineNumbers,
+                        onSave: saveCheckpoint
+                    )
+                    .onDisappear {
+                        requestError = nil
+                        saveError = nil
+                    }
+                }
+            }
+            .sheet(isPresented: $showBrowser) {
+                if let normalizedURL {
+                    InAppBrowserView(url: normalizedURL)
+                }
+            }
+            
+            .navigationTitle("New Checkpoint")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(step == .details ? "Cancel" : "Back") {
-                        if step == .response {
-                            step = .details
-                            requestError = nil
-                            saveError = nil
+                    Button("Close", systemImage: "xmark") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showBrowser = true
+                    } label: {
+                        Label("Visit Website", systemImage: "safari")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .disabled(normalizedURL == nil)
+                }
+                
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(action: {
+                        Task {
+                            await makeRequest()
+                        }
+                    }) {
+                        if isLoading {
+                            ProgressView()
                         } else {
-                            dismiss()
+                            Label(
+                                "Make Request",
+                                systemImage: "chevron.forward"
+                            )
                         }
                     }
+                    .disabled(!canMakeRequest || isLoading)
                 }
             }
             .alert("Couldn't Save Checkpoint", isPresented: Binding(
@@ -85,50 +127,50 @@ AddCheckpointDetailsView(
             }
         }
     }
-
+    
     static func normalizeURL(from raw: String) -> URL? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-
+        
         if let url = URL(string: trimmed), url.scheme != nil {
             return url
         }
-
+        
         return URL(string: "https://\(trimmed)")
     }
-
-@MainActor
+    
+    @MainActor
     private func makeRequest() async {
         guard let url = normalizedURL else {
             requestError = "Enter a valid URL."
             return
         }
-
+        
         isLoading = true
         requestError = nil
         defer {
             isLoading = false
             loadingProgress = nil
         }
-
+        
         do {
             let sample = try await sampleResponseBaseline(from: url) { progress in
                 loadingProgress = progress
             }
             responseResult = sample.baseline
             ignoredLineNumbers = sample.ignoredLineNumbers
-            step = .response
+            nextStep.toggle()
         } catch {
             requestError = error.localizedDescription
         }
     }
-
+    
     private func saveCheckpoint() {
         guard
             let url = normalizedURL,
             let result = responseResult
         else { return }
-
+        
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let checkpoint = WebsiteCheckpoint(
             name: trimmedName,
@@ -141,9 +183,9 @@ AddCheckpointDetailsView(
             match: .exact,
             updateExpectedHeaders: true
         )
-
+        
         modelContext.insert(checkpoint)
-
+        
         do {
             try modelContext.save()
             dismiss()
