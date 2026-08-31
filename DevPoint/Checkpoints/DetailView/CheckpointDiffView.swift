@@ -13,11 +13,14 @@ struct CheckpointDiffView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var unifiedDiff = ""
 
-    private var matchKind: ResponseMatchKind {
-        compareResponses(
-            expected: checkpoint.expectedResponse,
-            actual: checkpoint.lastResponse,
-            ignoredLineNumbers: checkpoint.ignoredLineNumbers
+private var matchKind: ResponseMatchKind {
+        compareCheckpoint(
+            expectedBody: checkpoint.expectedResponse,
+            actualBody: checkpoint.lastResponse,
+            ignoredLineNumbers: checkpoint.ignoredLineNumbers,
+            expectedHeaders: checkpoint.expectedResponseHeaders,
+            actualHeaders: checkpoint.lastResponseHeaders,
+            ignoredHeaderNames: checkpoint.ignoredHeaderNames
         )
     }
 
@@ -31,10 +34,10 @@ struct CheckpointDiffView: View {
                         systemImage: "checkmark.circle.fill",
                         description: Text("Expected and last response are identical.")
                     )
-                case .expectedMismatch:
+case .expectedMismatch:
                     if unifiedDiff.isEmpty {
                         ContentUnavailableView(
-                            "Only ignored lines differ",
+                            "Only ignored fields differ",
                             systemImage: "checkmark.circle",
                             description: Text("No diff content to display.")
                         )
@@ -61,7 +64,7 @@ struct CheckpointDiffView: View {
         .onAppear { updateDiff() }
         .onChange(of: checkpoint.lastResponse) { _, _ in updateDiff() }
         .onChange(of: checkpoint.expectedResponse) { _, _ in updateDiff() }
-        .navigationTitle("Latest Response")
+        .navigationTitle("Latest Body")
         .navigationSubtitle("\(checkpoint.lastResponseTitle) - \(checkpoint.status.title)")
     }
 

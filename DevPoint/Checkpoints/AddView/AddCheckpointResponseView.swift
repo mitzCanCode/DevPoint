@@ -10,16 +10,26 @@ import SwiftUI
 struct AddCheckpointResponseView: View {
     let name: String
     let url: URL
-    let result: URLResponseResult
+let result: URLResponseResult
     @Binding var ignoredLineNumbers: [Int]
+    @Binding var ignoredHeaderNames: [String]
     let onSave: () -> Void
     
     var body: some View {
         Form {
             overviewSection
             
-            if !result.headers.isEmpty {
-                headersSection
+if !result.headers.isEmpty {
+                Section {
+                    IgnoredHeadersEditor(
+                        headers: result.headers,
+                        ignoredHeaderNames: $ignoredHeaderNames
+                    )
+                } header: {
+                    Text("Headers")
+                } footer: {
+                    Text("Tap a header to ignore it during mismatch checks. Ignored headers are grayed out.")
+                }
             }
             Section {
                 IgnoredLinesEditor(
@@ -67,16 +77,6 @@ struct AddCheckpointResponseView: View {
     }
     
     
-    private var headersSection: some View {
-        Section("Headers") {
-            ForEach(result.headers.keys.sorted(), id: \.self) { key in
-                ResponseHeaderRow(
-                    key: key,
-                    value: result.headers[key] ?? ""
-                )
-            }
-        }
-    }
 }
 
 struct ResponseStatusBadge: View {
@@ -148,7 +148,8 @@ struct ResponseHeaderRow: View {
                 body: "{\"ok\":true}\ntimestamp: 1",
                 headers: ["Content-Type": "application/json"]
             ),
-            ignoredLineNumbers: .constant([2]),
+ignoredLineNumbers: .constant([2]),
+            ignoredHeaderNames: .constant(["Date"]),
             onSave: {}
         )
         .navigationTitle("Review Response")

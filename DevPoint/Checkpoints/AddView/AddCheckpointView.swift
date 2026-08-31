@@ -19,8 +19,9 @@ struct AddCheckpointView: View {
     @State private var loadingProgress: String?
     @State private var requestError: String?
     @State private var saveError: String?
-    @State private var responseResult: URLResponseResult?
+@State private var responseResult: URLResponseResult?
     @State private var ignoredLineNumbers: [Int] = []
+    @State private var ignoredHeaderNames: [String] = []
     @State private var nextStep: Bool = false
     
     private var normalizedURL: URL? {
@@ -47,7 +48,7 @@ struct AddCheckpointView: View {
                 } header: {
                     Text("Checkpoint Details")
                 } footer: {
-                    Text("Enter a name and URL, then open the site or sample the live response. Four requests are made one second apart so fluctuating lines can be ignored automatically.")
+Text("Enter a name and URL, then open the site or sample the live response. Four requests are made one second apart so fluctuating body lines and headers can be ignored automatically.")
                 }
                 
 
@@ -62,11 +63,12 @@ struct AddCheckpointView: View {
             }
             .navigationDestination(isPresented: $nextStep) {
                 if let responseResult, let normalizedURL {
-                    AddCheckpointResponseView(
+AddCheckpointResponseView(
                         name: name,
                         url: normalizedURL,
                         result: responseResult,
                         ignoredLineNumbers: $ignoredLineNumbers,
+                        ignoredHeaderNames: $ignoredHeaderNames,
                         onSave: saveCheckpoint
                     )
                     .onDisappear {
@@ -157,8 +159,9 @@ struct AddCheckpointView: View {
             let sample = try await sampleResponseBaseline(from: url) { progress in
                 loadingProgress = progress
             }
-            responseResult = sample.baseline
+responseResult = sample.baseline
             ignoredLineNumbers = sample.ignoredLineNumbers
+            ignoredHeaderNames = sample.ignoredHeaderNames
             nextStep.toggle()
         } catch {
             requestError = error.localizedDescription
@@ -177,7 +180,8 @@ struct AddCheckpointView: View {
             url: url,
             expectedResponse: result.body
         )
-        checkpoint.ignoredLineNumbers = ignoredLineNumbers
+checkpoint.ignoredLineNumbers = ignoredLineNumbers
+        checkpoint.ignoredHeaderNames = ignoredHeaderNames
         checkpoint.applyResponseResult(
             result,
             match: .exact,

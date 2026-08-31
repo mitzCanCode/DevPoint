@@ -132,12 +132,15 @@ struct CheckpointsView: View {
     private func refresh(_ checkpoint: WebsiteCheckpoint) async {
         let result = await requestUrl(checkpoint.url)
 
-        checkpoint.applyResponseResult(
+checkpoint.applyResponseResult(
             result,
-            match: compareResponses(
-                expected: checkpoint.expectedResponse,
-                actual: result.body,
-                ignoredLineNumbers: checkpoint.ignoredLineNumbers
+            match: compareCheckpoint(
+                expectedBody: checkpoint.expectedResponse,
+                actualBody: result.body,
+                ignoredLineNumbers: checkpoint.ignoredLineNumbers,
+                expectedHeaders: checkpoint.expectedResponseHeaders,
+                actualHeaders: result.headers,
+                ignoredHeaderNames: checkpoint.ignoredHeaderNames
             )
         )
         try? modelContext.save()

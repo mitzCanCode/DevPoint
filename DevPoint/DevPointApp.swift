@@ -34,7 +34,7 @@ struct DevPointApp: App {
         do {
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {
-            // Schema changes (e.g. new ignoredLineNumbers) can make the
+// Schema changes (e.g. new ignored fields) can make the
             // existing store unloadable. Reset once so the app can launch and
             // keep accepting new checkpoints.
             print("SwiftData load failed, resetting store: \(error)")

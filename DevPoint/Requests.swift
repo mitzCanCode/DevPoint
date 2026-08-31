@@ -106,6 +106,80 @@ func compareResponses(
     return .mismatch
 }
 
+/// Case-insensitive header map used for equality and ignore filtering.
+func normalizedHeaderMap(
+    _ headers: [String: String],
+    ignoring ignoredHeaderNames: [String] = []
+) -> [String: String] {
+    let ignored = Set(ignoredHeaderNames.map { $0.lowercased() })
+    var result: [String: String] = [:]
+    result.reserveCapacity(headers.count)
+
+    for (key, value) in headers {
+        let lowercasedKey = key.lowercased()
+        guard !ignored.contains(lowercasedKey) else { continue }
+        result[lowercasedKey] = value
+    }
+
+    return result
+}
+
+func compareHeaders(
+    expected: [String: String],
+    actual: [String: String],
+    ignoredHeaderNames: [String]
+) -> ResponseMatchKind {
+    let fullExpected = normalizedHeaderMap(expected)
+    let fullActual = normalizedHeaderMap(actual)
+
+    if fullExpected == fullActual {
+        return .exact
+    }
+
+    let normalizedExpected = normalizedHeaderMap(expected, ignoring: ignoredHeaderNames)
+    let normalizedActual = normalizedHeaderMap(actual, ignoring: ignoredHeaderNames)
+
+    if normalizedExpected == normalizedActual {
+        return .expectedMismatch
+    }
+
+    return .mismatch
+}
+
+func combineMatchKinds(_ lhs: ResponseMatchKind, _ rhs: ResponseMatchKind) -> ResponseMatchKind {
+    switch (lhs, rhs) {
+    case (.mismatch, _), (_, .mismatch):
+        return .mismatch
+    case (.expectedMismatch, _), (_, .expectedMismatch):
+        return .expectedMismatch
+    case (.exact, .exact):
+        return .exact
+    }
+}
+
+/// Overall body + header match using the same ignore rules as the editors.
+func compareCheckpoint(
+    expectedBody: String,
+    actualBody: String,
+    ignoredLineNumbers: [Int],
+    expectedHeaders: [String: String],
+    actualHeaders: [String: String],
+    ignoredHeaderNames: [String]
+) -> ResponseMatchKind {
+    combineMatchKinds(
+        compareResponses(
+            expected: expectedBody,
+            actual: actualBody,
+            ignoredLineNumbers: ignoredLineNumbers
+        ),
+        compareHeaders(
+            expected: expectedHeaders,
+            actual: actualHeaders,
+            ignoredHeaderNames: ignoredHeaderNames
+        )
+    )
+}
+
 /// 1-based line numbers where expected and actual differ (for highlighting).
 func differingLineNumbers(expected: String, actual: String) -> Set<Int> {
     let oldLines = responseLines(from: expected)
@@ -124,6 +198,32 @@ func differingLineNumbers(expected: String, actual: String) -> Set<Int> {
     return result
 }
 
+/// Header names (preferring expected casing) whose values differ between maps.
+func differingHeaderNames(
+    expected: [String: String],
+    actual: [String: String]
+) -> Set<String> {
+    let expectedByLower = Dictionary(
+        uniqueKeysWithValues: expected.map { ($0.key.lowercased(), ($0.key, $0.value)) }
+    )
+    let actualByLower = Dictionary(
+        uniqueKeysWithValues: actual.map { ($0.key.lowercased(), ($0.key, $0.value)) }
+    )
+
+    var result = Set<String>()
+    let allKeys = Set(expectedByLower.keys).union(actualByLower.keys)
+
+    for key in allKeys {
+        let expectedEntry = expectedByLower[key]
+        let actualEntry = actualByLower[key]
+        if expectedEntry?.1 != actualEntry?.1 {
+            result.insert(expectedEntry?.0 ?? actualEntry?.0 ?? key)
+        }
+    }
+
+    return result
+}
+
 /// 1-based line numbers that are not identical across every sampled response body.
 func unstableLineNumbers(across bodies: [String]) -> [Int] {
     guard let first = bodies.first else { return [] }
@@ -134,6 +234,18 @@ func unstableLineNumbers(across bodies: [String]) -> [Int] {
     }
 
     return unstable.sorted()
+}
+
+/// Header names that are not identical across every sampled response.
+func unstableHeaderNames(across headerMaps: [[String: String]]) -> [String] {
+    guard let first = headerMaps.first else { return [] }
+
+    var unstable = Set<String>()
+    for headers in headerMaps.dropFirst() {
+        unstable.formUnion(differingHeaderNames(expected: first, actual: headers))
+    }
+
+    return unstable.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
 }
 
 enum ResponseSampleError: LocalizedError {
@@ -150,13 +262,14 @@ enum ResponseSampleError: LocalizedError {
 struct ResponseSampleResult {
     let baseline: URLResponseResult
     let ignoredLineNumbers: [Int]
+    let ignoredHeaderNames: [String]
 }
 
 let responseSampleRequestCount = 4
 let responseSampleDelayNanoseconds: UInt64 = 1_000_000_000
 
-/// Fetches the URL several times with a delay, using the first body as baseline
-/// and auto-ignoring lines that change across samples.
+/// Fetches the URL several times with a delay, using the first response as baseline
+/// and auto-ignoring body lines and headers that change across samples.
 func sampleResponseBaseline(
     from url: URL,
     sampleCount: Int = responseSampleRequestCount,
@@ -185,9 +298,10 @@ func sampleResponseBaseline(
         throw ResponseSampleError.requestFailed("No responses were received.")
     }
 
-    return ResponseSampleResult(
+return ResponseSampleResult(
         baseline: baseline,
-        ignoredLineNumbers: unstableLineNumbers(across: samples.map(\.body))
+        ignoredLineNumbers: unstableLineNumbers(across: samples.map(\.body)),
+        ignoredHeaderNames: unstableHeaderNames(across: samples.map(\.headers))
     )
 }
 

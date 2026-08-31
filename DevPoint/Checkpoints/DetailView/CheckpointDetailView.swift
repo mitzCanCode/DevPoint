@@ -24,11 +24,11 @@ struct CheckpointDetailView: View {
     
     private var navigationSubtitle: String {
         let elapsed = now.timeIntervalSince(checkpoint.lastRunDate)
-
+        
         if elapsed < 60 {
             return "Last Checked: Now"
         }
-
+        
         return "Last Checked: \(Self.relativeDateFormatter.localizedString( for: checkpoint.lastRunDate, relativeTo: now ))"
     }
     
@@ -39,10 +39,13 @@ struct CheckpointDetailView: View {
     }()
     
     private var matchKind: ResponseMatchKind {
-        compareResponses(
-            expected: checkpoint.expectedResponse,
-            actual: checkpoint.lastResponse,
-            ignoredLineNumbers: checkpoint.ignoredLineNumbers
+        compareCheckpoint(
+            expectedBody: checkpoint.expectedResponse,
+            actualBody: checkpoint.lastResponse,
+            ignoredLineNumbers: checkpoint.ignoredLineNumbers,
+            expectedHeaders: checkpoint.expectedResponseHeaders,
+            actualHeaders: checkpoint.lastResponseHeaders,
+            ignoredHeaderNames: checkpoint.ignoredHeaderNames
         )
     }
     
@@ -51,6 +54,17 @@ struct CheckpointDetailView: View {
             get: { checkpoint.ignoredLineNumbers },
             set: { newValue in
                 checkpoint.ignoredLineNumbers = newValue
+                checkpoint.recomputeStatus()
+                try? modelContext.save()
+            }
+        )
+    }
+    
+    private var ignoredHeadersBinding: Binding<[String]> {
+        Binding(
+            get: { checkpoint.ignoredHeaderNames },
+            set: { newValue in
+                checkpoint.ignoredHeaderNames = newValue
                 checkpoint.recomputeStatus()
                 try? modelContext.save()
             }
@@ -202,7 +216,7 @@ struct CheckpointDetailView: View {
             Text("A summary of the checkpoint's current status and latest results.")
         }
     }
-
+    
     private func commitURLEdit() {
         guard let url = AddCheckpointView.normalizeURL(from: editedURLString) else {
             urlEditError = "Enter a valid URL."
@@ -224,19 +238,20 @@ struct CheckpointDetailView: View {
             NavigationLink {
                 CheckpointHeadersView(checkpoint: checkpoint)
             } label: {
-                Label("Headers", systemImage: "list.bullet.rectangle")
+                Label("Latest Headers", systemImage: "list.bullet.rectangle")
             }
             
             NavigationLink {
                 CheckpointDiffView(checkpoint: checkpoint)
             } label: {
-                Label("Latest Response", systemImage: "arrow.left.arrow.right")
+                Label("Latest Body", systemImage: "arrow.left.arrow.right")
             }
             
             NavigationLink {
                 CheckpointExpectedResponseView(
                     checkpoint: checkpoint,
-                    ignoredLineNumbers: ignoredLinesBinding
+                    ignoredLineNumbers: ignoredLinesBinding,
+                    ignoredHeaderNames: ignoredHeadersBinding
                 )
             } label: {
                 Label("Expected Response", systemImage: "doc.text")
@@ -253,7 +268,7 @@ struct CheckpointDetailView: View {
         case .exact:
             return "Exact match"
         case .expectedMismatch:
-            return "Only ignored lines differ"
+            return "Only ignored fields differ"
         case .mismatch:
             return "Mismatch"
         }
@@ -278,13 +293,16 @@ struct CheckpointDetailView: View {
         defer { isRefreshing = false }
         
         let result = await requestUrl(checkpoint.url)
-
+        
         checkpoint.applyResponseResult(
             result,
-            match: compareResponses(
-                expected: checkpoint.expectedResponse,
-                actual: result.body,
-                ignoredLineNumbers: checkpoint.ignoredLineNumbers
+            match: compareCheckpoint(
+                expectedBody: checkpoint.expectedResponse,
+                actualBody: result.body,
+                ignoredLineNumbers: checkpoint.ignoredLineNumbers,
+                expectedHeaders: checkpoint.expectedResponseHeaders,
+                actualHeaders: result.headers,
+                ignoredHeaderNames: checkpoint.ignoredHeaderNames
             )
         )
         try? modelContext.save()

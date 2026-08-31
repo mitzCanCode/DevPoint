@@ -80,10 +80,12 @@ final class WebsiteCheckpoint {
     var lastResponse: String
     /// JSON-encoded `[String: String]` of the latest response headers.
     var lastResponseHeadersJSON: String = "{}"
-    /// JSON-encoded `[String: String]` of the baseline/expected response headers.
+/// JSON-encoded `[String: String]` of the baseline/expected response headers.
     var expectedResponseHeadersJSON: String = "{}"
     /// 1-based line numbers in the response body to exclude from mismatch checks.
     var ignoredLineNumbers: [Int] = []
+    /// Header names to exclude from mismatch checks (case-insensitive match).
+    var ignoredHeaderNames: [String] = []
 
     var lastResponseHeaders: [String: String] {
         get { Self.decodeHeaders(lastResponseHeadersJSON) }
@@ -112,9 +114,10 @@ final class WebsiteCheckpoint {
         self.lastResponseStatusCode = ""
         self.lastResponseDescription = ""
         self.lastResponse = ""
-        self.lastResponseHeadersJSON = "{}"
+self.lastResponseHeadersJSON = "{}"
         self.expectedResponseHeadersJSON = "{}"
         self.ignoredLineNumbers = []
+        self.ignoredHeaderNames = []
     }
 
     /// Writes status/body/header fields from a live request result.
@@ -180,12 +183,15 @@ final class WebsiteCheckpoint {
             code = 200
         }
 
-        status = determineCheckpointStatus(
+status = determineCheckpointStatus(
             statusCode: code,
-            match: compareResponses(
-                expected: expectedResponse,
-                actual: lastResponse,
-                ignoredLineNumbers: ignoredLineNumbers
+            match: compareCheckpoint(
+                expectedBody: expectedResponse,
+                actualBody: lastResponse,
+                ignoredLineNumbers: ignoredLineNumbers,
+                expectedHeaders: expectedResponseHeaders,
+                actualHeaders: lastResponseHeaders,
+                ignoredHeaderNames: ignoredHeaderNames
             )
         )
     }
@@ -196,6 +202,17 @@ final class WebsiteCheckpoint {
         } else {
             ignoredLineNumbers.append(lineNumber)
             ignoredLineNumbers.sort()
+        }
+        recomputeStatus()
+    }
+
+    func toggleIgnoredHeaderName(_ headerName: String) {
+        let target = headerName.lowercased()
+        if let index = ignoredHeaderNames.firstIndex(where: { $0.lowercased() == target }) {
+            ignoredHeaderNames.remove(at: index)
+        } else {
+            ignoredHeaderNames.append(headerName)
+            ignoredHeaderNames.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
         }
         recomputeStatus()
     }
