@@ -7,25 +7,69 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
+import UserNotifications
+
+final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+
+        return true
+    }
+
+    // Show banners even while DevPoint is in the foreground (needed when debugging).
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound, .badge]
+    }
+}
 
 @main
 struct DevPointApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let modelContainer: ModelContainer
 
     init() {
-        modelContainer = Self.makeModelContainer()
+        // Must register before the app finishes launching.
+        CheckpointMonitoringService.registerBackgroundTasks()
+
+        let container = Self.makeModelContainer()
+        modelContainer = container
+
+        let monitoring = CheckpointMonitoringService.shared
+        monitoring.configure(modelContainer: container)
+        monitoring.start()
     }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .tint(Color.accentColor)
+                .onReceive(
+                    NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+                ) { _ in
+                    // Ask iOS again whenever the app returns to the foreground.
+                    CheckpointMonitoringService.shared.scheduleBackgroundRefresh()
+                }
+                .onReceive(
+                    NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
+                ) { _ in
+                    // Also (re-)submit right as we background — this is when iOS actually
+                    // evaluates the request against usage heuristics, so a fresh
+                    // earliestBeginDate here gives the system its best shot at honoring it.
+                    CheckpointMonitoringService.shared.scheduleBackgroundRefresh()
+                }
         }
         .modelContainer(modelContainer)
     }
 
     private static func makeModelContainer() -> ModelContainer {
-        let schema = Schema([WebsiteCheckpoint.self])
+        let schema = Schema([Checkpoint.self])
         let configuration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false

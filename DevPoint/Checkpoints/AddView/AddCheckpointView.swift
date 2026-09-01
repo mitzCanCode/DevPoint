@@ -14,12 +14,13 @@ struct AddCheckpointView: View {
     
     @State private var name: String = ""
     @State private var urlString: String = ""
+    @State private var checkpointType: CheckpointType = .website
     
     @State private var isLoading = false
     @State private var loadingProgress: String?
     @State private var requestError: String?
     @State private var saveError: String?
-@State private var responseResult: URLResponseResult?
+    @State private var responseResult: URLResponseResult?
     @State private var ignoredLineNumbers: [Int] = []
     @State private var ignoredHeaderNames: [String] = []
     @State private var nextStep: Bool = false
@@ -45,13 +46,20 @@ struct AddCheckpointView: View {
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                    
+                    Picker("Type", selection: $checkpointType) {
+                        ForEach(CheckpointType.allCases, id: \.self) { type in
+                            Label(type.title, systemImage: type.icon)
+                                .tag(type)
+                        }
+                    }
                 } header: {
                     Text("Checkpoint Details")
                 } footer: {
-Text("Enter a name and URL, then open the site or sample the live response. Four requests are made one second apart so fluctuating body lines and headers can be ignored automatically.")
+                    Text("Enter a name, type, and URL, then open the site or sample the live response. Four requests are made one second apart so fluctuating body lines and headers can be ignored automatically.")
                 }
                 
-
+                
                 
                 if let requestError {
                     Section {
@@ -63,7 +71,7 @@ Text("Enter a name and URL, then open the site or sample the live response. Four
             }
             .navigationDestination(isPresented: $nextStep) {
                 if let responseResult, let normalizedURL {
-AddCheckpointResponseView(
+                    AddCheckpointResponseView(
                         name: name,
                         url: normalizedURL,
                         result: responseResult,
@@ -159,7 +167,7 @@ AddCheckpointResponseView(
             let sample = try await sampleResponseBaseline(from: url) { progress in
                 loadingProgress = progress
             }
-responseResult = sample.baseline
+            responseResult = sample.baseline
             ignoredLineNumbers = sample.ignoredLineNumbers
             ignoredHeaderNames = sample.ignoredHeaderNames
             nextStep.toggle()
@@ -175,12 +183,13 @@ responseResult = sample.baseline
         else { return }
         
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let checkpoint = WebsiteCheckpoint(
+        let checkpoint = Checkpoint(
             name: trimmedName,
             url: url,
-            expectedResponse: result.body
+            expectedResponse: result.body,
+            checkpointType: checkpointType
         )
-checkpoint.ignoredLineNumbers = ignoredLineNumbers
+        checkpoint.ignoredLineNumbers = ignoredLineNumbers
         checkpoint.ignoredHeaderNames = ignoredHeaderNames
         checkpoint.applyResponseResult(
             result,
@@ -202,5 +211,5 @@ checkpoint.ignoredLineNumbers = ignoredLineNumbers
 
 #Preview {
     AddCheckpointView()
-        .modelContainer(for: WebsiteCheckpoint.self, inMemory: true)
+        .modelContainer(for: Checkpoint.self, inMemory: true)
 }

@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 
 struct CheckpointDetailView: View {
-    @Bindable var checkpoint: WebsiteCheckpoint
+    @Bindable var checkpoint: Checkpoint
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     
@@ -129,7 +129,7 @@ struct CheckpointDetailView: View {
         }
     }
     
-    private var editSection: some View {
+private var editSection: some View {
         Section {
             TextField("Name", text: $editedName)
                 .textInputAutocapitalization(.words)
@@ -139,6 +139,16 @@ struct CheckpointDetailView: View {
                     checkpoint.name = trimmed
                     try? modelContext.save()
                 }
+            
+            Picker("Type", selection: $checkpoint.checkpointType) {
+                ForEach(CheckpointType.allCases, id: \.self) { type in
+                    Label(type.title, systemImage: type.icon)
+                        .tag(type)
+                }
+            }
+            .onChange(of: checkpoint.checkpointType) { _, _ in
+                try? modelContext.save()
+            }
             
             TextField("https://example.com", text: $editedURLString)
                 .keyboardType(.URL)
@@ -163,15 +173,21 @@ struct CheckpointDetailView: View {
         } header: {
             Text("Checkpoint")
         } footer: {
-            Text("Details about this checkpoint and the website it represents.")
+            Text("Details about this checkpoint, including its type and target URL.")
         }
         .onDisappear {
             commitURLEdit()
         }
     }
     
-    private var overviewSection: some View {
+private var overviewSection: some View {
         Section {
+            LabeledContent("Type") {
+                Label(checkpoint.checkpointType.title, systemImage: checkpoint.checkpointType.icon)
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(.secondary)
+            }
+            
             LabeledContent("Health") {
                 HStack(spacing: 6) {
                     Circle()
@@ -288,23 +304,11 @@ struct CheckpointDetailView: View {
     @MainActor
     private func refresh() async {
         guard !isRefreshing else { return }
-        
+
         isRefreshing = true
         defer { isRefreshing = false }
-        
-        let result = await requestUrl(checkpoint.url)
-        
-        checkpoint.applyResponseResult(
-            result,
-            match: compareCheckpoint(
-                expectedBody: checkpoint.expectedResponse,
-                actualBody: result.body,
-                ignoredLineNumbers: checkpoint.ignoredLineNumbers,
-                expectedHeaders: checkpoint.expectedResponseHeaders,
-                actualHeaders: result.headers,
-                ignoredHeaderNames: checkpoint.ignoredHeaderNames
-            )
-        )
+
+        await CheckpointMonitoringService.refresh(checkpoint)
         try? modelContext.save()
     }
 }
@@ -314,10 +318,11 @@ struct CheckpointDetailView: View {
 
 
 #Preview {
-    let checkpoint = WebsiteCheckpoint(
+    let checkpoint = Checkpoint(
         name: "Example",
         url: URL(string: "https://example.com")!,
-        expectedResponse: "{\"ok\":true}"
+        expectedResponse: "{\"ok\":true}",
+        checkpointType: .website
     )
     checkpoint.lastResponse = "{\"ok\":false,\"error\":\"down\"}"
     checkpoint.lastResponseTitle = "HTTP 200"
@@ -325,5 +330,5 @@ struct CheckpointDetailView: View {
     checkpoint.status = .responseMismatch
     
     return CheckpointDetailView(checkpoint: checkpoint)
-        .modelContainer(for: WebsiteCheckpoint.self, inMemory: true)
+        .modelContainer(for: Checkpoint.self, inMemory: true)
 }

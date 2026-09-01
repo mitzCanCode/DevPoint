@@ -10,12 +10,28 @@ import SwiftData
 
 struct CheckpointsView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \WebsiteCheckpoint.creationDate, order: .reverse) private var checkpoints: [WebsiteCheckpoint]
-    
+    @Query(sort: \Checkpoint.creationDate, order: .reverse) private var checkpoints: [Checkpoint]
+
     @State private var showSheet = false
-    @State private var selectedCheckpoint: WebsiteCheckpoint?
+    @State private var selectedCheckpoint: Checkpoint?
     @State private var isRefreshing = false
-    
+    @State private var searchText = ""
+    @State private var now = Date()
+
+    private var filteredCheckpoints: [Checkpoint] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return checkpoints }
+
+return checkpoints.filter { checkpoint in
+            checkpoint.name.localizedCaseInsensitiveContains(query)
+                || checkpoint.url.absoluteString.localizedCaseInsensitiveContains(query)
+                || checkpoint.status.title.localizedCaseInsensitiveContains(query)
+                || checkpoint.checkpointType.title.localizedCaseInsensitiveContains(query)
+                || checkpoint.lastResponseStatusCode.localizedCaseInsensitiveContains(query)
+                || checkpoint.lastResponseTitle.localizedCaseInsensitiveContains(query)
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -25,40 +41,21 @@ struct CheckpointsView: View {
                         systemImage: "network",
                         description: Text("Add a checkpoint to start monitoring a website response.")
                     )
+                } else if filteredCheckpoints.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
                 } else {
                     List {
-                        ForEach(checkpoints) { checkpoint in
+                        ForEach(filteredCheckpoints) { checkpoint in
                             Button {
                                 selectedCheckpoint = checkpoint
                             } label: {
-                                HStack(spacing: 12) {
-                                    Circle()
-                                        .fill(checkpoint.status.color)
-                                        .frame(width: 10, height: 10)
-                                    
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(checkpoint.name)
-                                            .font(.body.weight(.medium))
-                                            .foregroundStyle(.primary)
-                                        
-                                        Text(checkpoint.url.absoluteString)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                    
-                                    Spacer(minLength: 8)
-                                    
-                                    if isRefreshing {
-                                        ProgressView()
-                                            .controlSize(.small)
-                                    } else {
-                                        Text(checkpoint.status.title)
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(checkpoint.status.color)
-                                    }
-                                }
+                                CheckpointRowView(
+                                    checkpoint: checkpoint,
+                                    isRefreshing: isRefreshing,
+                                    now: now
+                                )
                             }
+                            .buttonStyle(.plain)
                             .contextMenu {
                                 Button("Delete", systemImage: "trash", role: .destructive) {
                                     delete(checkpoint)
@@ -67,12 +64,14 @@ struct CheckpointsView: View {
                         }
                         .onDelete(perform: deleteCheckpoints)
                     }
+                    .listStyle(.insetGrouped)
                     .refreshable {
                         await refreshAllCheckpoints(force: true)
                     }
                 }
             }
             .navigationTitle("Checkpoints")
+.searchable(text: $searchText, prompt: "Name, URL, type, or status")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -94,60 +93,51 @@ struct CheckpointsView: View {
                     await refreshAllCheckpoints()
                 }
             }
+            .task {
+                while !Task.isCancelled {
+                    now = Date()
+                    try? await Task.sleep(for: .seconds(30))
+                }
+            }
         }
     }
-    
-    private func delete(_ checkpoint: WebsiteCheckpoint) {
+
+    private func delete(_ checkpoint: Checkpoint) {
         if selectedCheckpoint?.persistentModelID == checkpoint.persistentModelID {
             selectedCheckpoint = nil
         }
         modelContext.delete(checkpoint)
         try? modelContext.save()
     }
-    
+
     private func deleteCheckpoints(at offsets: IndexSet) {
         for index in offsets {
-            delete(checkpoints[index])
+            delete(filteredCheckpoints[index])
         }
     }
-    
+
     @MainActor
     private func refreshAllCheckpoints(force: Bool = false) async {
         guard !checkpoints.isEmpty else { return }
         guard force || !isRefreshing else { return }
-        
+
         isRefreshing = true
         defer { isRefreshing = false }
-        
+
         await withTaskGroup(of: Void.self) { group in
             for checkpoint in checkpoints {
                 group.addTask { @MainActor in
-                    await refresh(checkpoint)
+                    await CheckpointMonitoringService.refresh(checkpoint)
                 }
             }
         }
-    }
-    
-    @MainActor
-    private func refresh(_ checkpoint: WebsiteCheckpoint) async {
-        let result = await requestUrl(checkpoint.url)
 
-checkpoint.applyResponseResult(
-            result,
-            match: compareCheckpoint(
-                expectedBody: checkpoint.expectedResponse,
-                actualBody: result.body,
-                ignoredLineNumbers: checkpoint.ignoredLineNumbers,
-                expectedHeaders: checkpoint.expectedResponseHeaders,
-                actualHeaders: result.headers,
-                ignoredHeaderNames: checkpoint.ignoredHeaderNames
-            )
-        )
         try? modelContext.save()
     }
 }
 
+
 #Preview {
     CheckpointsView()
-        .modelContainer(for: WebsiteCheckpoint.self, inMemory: true)
+        .modelContainer(for: Checkpoint.self, inMemory: true)
 }

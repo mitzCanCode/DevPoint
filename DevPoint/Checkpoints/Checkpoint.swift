@@ -19,7 +19,7 @@ enum CheckpointStatus: String, Codable {
     case responseMismatch
     /// HTTP OK, but the body differs only on lines the user chose to ignore.
     case expectedMismatch
-
+    
     var title: String {
         switch self {
         case .healthy:
@@ -40,7 +40,7 @@ enum CheckpointStatus: String, Codable {
             return "OK (Expected Mismatch)"
         }
     }
-
+    
     var color: Color {
         switch self {
         case .healthy:
@@ -64,13 +64,69 @@ enum CheckpointStatus: String, Codable {
 }
 
 
+enum CheckpointType: String, Codable, CaseIterable {
+    case api
+    case website
+    case server
+    case database
+    case dns
+    case port
+    case ssl
+    case webhook
+    
+    var title: String {
+        switch self {
+        case .api:
+            return "API"
+        case .website:
+            return "Website"
+        case .server:
+            return "Server"
+        case .database:
+            return "Database"
+        case .dns:
+            return "DNS"
+        case .port:
+            return "Port"
+        case .ssl:
+            return "SSL"
+        case .webhook:
+            return "Webhook"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .api:
+            return "arrow.left.arrow.right"
+        case .website:
+            return "globe"
+        case .server:
+            return "server.rack"
+        case .database:
+            return "cylinder"
+        case .dns:
+            return "network"
+        case .port:
+            return "point.3.connected.trianglepath.dotted"
+        case .ssl:
+            return "lock.shield"
+        case .webhook:
+            return "arrow.triangle.2.circlepath"
+        }
+    }
+}
+
+
+
 @Model
-final class WebsiteCheckpoint {
+final class Checkpoint {
     var name: String
     var creationDate: Date
     var lastRunDate: Date
     var status: CheckpointStatus
-
+    var checkpointType: CheckpointType
+    
     var url: URL
     var expectedResponse: String
     var lastResponseTitle: String
@@ -80,46 +136,47 @@ final class WebsiteCheckpoint {
     var lastResponse: String
     /// JSON-encoded `[String: String]` of the latest response headers.
     var lastResponseHeadersJSON: String = "{}"
-/// JSON-encoded `[String: String]` of the baseline/expected response headers.
+    /// JSON-encoded `[String: String]` of the baseline/expected response headers.
     var expectedResponseHeadersJSON: String = "{}"
     /// 1-based line numbers in the response body to exclude from mismatch checks.
     var ignoredLineNumbers: [Int] = []
     /// Header names to exclude from mismatch checks (case-insensitive match).
     var ignoredHeaderNames: [String] = []
-
     var lastResponseHeaders: [String: String] {
         get { Self.decodeHeaders(lastResponseHeadersJSON) }
         set { lastResponseHeadersJSON = Self.encodeHeaders(newValue) }
     }
-
+    
     var expectedResponseHeaders: [String: String] {
         get { Self.decodeHeaders(expectedResponseHeadersJSON) }
         set { expectedResponseHeadersJSON = Self.encodeHeaders(newValue) }
     }
-
+    
     init(
         name: String,
         url: URL,
-        expectedResponse: String
+        expectedResponse: String,
+        checkpointType: CheckpointType = .website
     ) {
         self.name = name
         self.creationDate = Date()
         self.lastRunDate = Date()
         self.status = .unknown
-
+        self.checkpointType = checkpointType
+        
         self.url = url
         self.expectedResponse = expectedResponse
-
+        
         self.lastResponseTitle = ""
         self.lastResponseStatusCode = ""
         self.lastResponseDescription = ""
         self.lastResponse = ""
-self.lastResponseHeadersJSON = "{}"
+        self.lastResponseHeadersJSON = "{}"
         self.expectedResponseHeadersJSON = "{}"
         self.ignoredLineNumbers = []
         self.ignoredHeaderNames = []
     }
-
+    
     /// Writes status/body/header fields from a live request result.
     func applyResponseResult(
         _ result: URLResponseResult,
@@ -128,28 +185,28 @@ self.lastResponseHeadersJSON = "{}"
     ) {
         lastResponse = result.body
         lastResponseTitle = result.statusCode == -1
-            ? (result.errorMessage ?? "Request failed")
-            : "HTTP \(result.statusCode)"
+        ? (result.errorMessage ?? "Request failed")
+        : "HTTP \(result.statusCode)"
         lastResponseStatusCode = result.statusCode == -1
-            ? "—"
-            : "\(result.statusCode)"
+        ? "—"
+        : "\(result.statusCode)"
         lastResponseDescription = result.headers["Content-Type"]
-            ?? result.headers["content-type"]
-            ?? result.errorMessage
-            ?? ""
+        ?? result.headers["content-type"]
+        ?? result.errorMessage
+        ?? ""
         lastResponseHeaders = result.headers
         if updateExpectedHeaders {
             expectedResponseHeaders = result.headers
         }
         lastRunDate = Date()
-
+        
         if let match {
             status = determineCheckpointStatus(statusCode: result.statusCode, match: match)
         } else {
             recomputeStatus(statusCode: result.statusCode)
         }
     }
-
+    
     private static func encodeHeaders(_ headers: [String: String]) -> String {
         guard JSONSerialization.isValidJSONObject(headers),
               let data = try? JSONSerialization.data(withJSONObject: headers, options: [.sortedKeys]),
@@ -159,7 +216,7 @@ self.lastResponseHeadersJSON = "{}"
         }
         return string
     }
-
+    
     private static func decodeHeaders(_ json: String) -> [String: String] {
         guard let data = json.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data),
@@ -169,7 +226,7 @@ self.lastResponseHeadersJSON = "{}"
         }
         return headers
     }
-
+    
     func recomputeStatus(statusCode: Int? = nil) {
         let code: Int
         if let statusCode {
@@ -182,8 +239,8 @@ self.lastResponseHeadersJSON = "{}"
         } else {
             code = 200
         }
-
-status = determineCheckpointStatus(
+        
+        status = determineCheckpointStatus(
             statusCode: code,
             match: compareCheckpoint(
                 expectedBody: expectedResponse,
@@ -195,7 +252,7 @@ status = determineCheckpointStatus(
             )
         )
     }
-
+    
     func toggleIgnoredLineNumber(_ lineNumber: Int) {
         if let index = ignoredLineNumbers.firstIndex(of: lineNumber) {
             ignoredLineNumbers.remove(at: index)
@@ -205,7 +262,7 @@ status = determineCheckpointStatus(
         }
         recomputeStatus()
     }
-
+    
     func toggleIgnoredHeaderName(_ headerName: String) {
         let target = headerName.lowercased()
         if let index = ignoredHeaderNames.firstIndex(where: { $0.lowercased() == target }) {

@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 
 struct CheckpointHeadersView: View {
-    let checkpoint: WebsiteCheckpoint
+    let checkpoint: Checkpoint
 
     private var expectedHeaders: [String: String] {
         checkpoint.expectedResponseHeaders
@@ -212,7 +212,7 @@ private struct GitHeaderValueLine: View {
 }
 
 #Preview {
-    let checkpoint = WebsiteCheckpoint(
+    let checkpoint = Checkpoint(
         name: "Example",
         url: URL(string: "https://example.com")!,
         expectedResponse: "{\"ok\":true}"
@@ -235,5 +235,5 @@ private struct GitHeaderValueLine: View {
     return NavigationStack {
         CheckpointHeadersView(checkpoint: checkpoint)
     }
-    .modelContainer(for: WebsiteCheckpoint.self, inMemory: true)
+    .modelContainer(for: Checkpoint.self, inMemory: true)
 }

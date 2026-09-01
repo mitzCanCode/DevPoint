@@ -15,9 +15,9 @@ struct ContentView: View {
                 .tabItem {
                     Label("Websites", systemImage: "network")
                 }
-            APIView()
+            SettingsView()
                 .tabItem {
-                    Label("APIs", systemImage: "server.rack")
+                    Label("Settings", systemImage: "gearshape")
                 }
         }
     }
@@ -25,5 +25,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: WebsiteCheckpoint.self, inMemory: true)
+        .modelContainer(for: Checkpoint.self, inMemory: true)
 }

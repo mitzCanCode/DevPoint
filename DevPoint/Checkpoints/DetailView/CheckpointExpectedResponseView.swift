@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 
 struct CheckpointExpectedResponseView: View {
-    @Bindable var checkpoint: WebsiteCheckpoint
+    @Bindable var checkpoint: Checkpoint
     @Binding var ignoredLineNumbers: [Int]
     @Binding var ignoredHeaderNames: [String]
     @Environment(\.modelContext) private var modelContext

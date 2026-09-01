@@ -9,7 +9,7 @@ import SwiftUI
 import gitdiff
 
 struct CheckpointDiffView: View {
-    let checkpoint: WebsiteCheckpoint
+    let checkpoint: Checkpoint
     @Environment(\.colorScheme) private var colorScheme
     @State private var unifiedDiff = ""
 
