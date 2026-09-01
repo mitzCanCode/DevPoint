@@ -11,35 +11,35 @@ import SwiftData
 struct CheckpointsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Checkpoint.creationDate, order: .reverse) private var checkpoints: [Checkpoint]
-
+    
     @State private var showSheet = false
     @State private var selectedCheckpoint: Checkpoint?
     @State private var isRefreshing = false
     @State private var searchText = ""
     @State private var now = Date()
-
+    
     private var filteredCheckpoints: [Checkpoint] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return checkpoints }
-
-return checkpoints.filter { checkpoint in
+        
+        return checkpoints.filter { checkpoint in
             checkpoint.name.localizedCaseInsensitiveContains(query)
-                || checkpoint.url.absoluteString.localizedCaseInsensitiveContains(query)
-                || checkpoint.status.title.localizedCaseInsensitiveContains(query)
-                || checkpoint.checkpointType.title.localizedCaseInsensitiveContains(query)
-                || checkpoint.lastResponseStatusCode.localizedCaseInsensitiveContains(query)
-                || checkpoint.lastResponseTitle.localizedCaseInsensitiveContains(query)
+            || checkpoint.url.absoluteString.localizedCaseInsensitiveContains(query)
+            || checkpoint.status.title.localizedCaseInsensitiveContains(query)
+            || checkpoint.checkpointType.title.localizedCaseInsensitiveContains(query)
+            || checkpoint.lastResponseStatusCode.localizedCaseInsensitiveContains(query)
+            || checkpoint.lastResponseTitle.localizedCaseInsensitiveContains(query)
         }
     }
-
+    
     var body: some View {
         NavigationStack {
             Group {
                 if checkpoints.isEmpty {
                     ContentUnavailableView(
                         "No Checkpoints",
-                        systemImage: "network",
-                        description: Text("Add a checkpoint to start monitoring a website response.")
+                        systemImage: "pc",
+                        description: Text("Add a checkpoint to start monitoring a website and API responses.")
                     )
                 } else if filteredCheckpoints.isEmpty {
                     ContentUnavailableView.search(text: searchText)
@@ -71,7 +71,7 @@ return checkpoints.filter { checkpoint in
                 }
             }
             .navigationTitle("Checkpoints")
-.searchable(text: $searchText, prompt: "Name, URL, type, or status")
+            .searchable(text: $searchText, prompt: "Name, URL, type, or status")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -101,7 +101,7 @@ return checkpoints.filter { checkpoint in
             }
         }
     }
-
+    
     private func delete(_ checkpoint: Checkpoint) {
         if selectedCheckpoint?.persistentModelID == checkpoint.persistentModelID {
             selectedCheckpoint = nil
@@ -109,21 +109,21 @@ return checkpoints.filter { checkpoint in
         modelContext.delete(checkpoint)
         try? modelContext.save()
     }
-
+    
     private func deleteCheckpoints(at offsets: IndexSet) {
         for index in offsets {
             delete(filteredCheckpoints[index])
         }
     }
-
+    
     @MainActor
     private func refreshAllCheckpoints(force: Bool = false) async {
         guard !checkpoints.isEmpty else { return }
         guard force || !isRefreshing else { return }
-
+        
         isRefreshing = true
         defer { isRefreshing = false }
-
+        
         await withTaskGroup(of: Void.self) { group in
             for checkpoint in checkpoints {
                 group.addTask { @MainActor in

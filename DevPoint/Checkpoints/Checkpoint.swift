@@ -67,12 +67,6 @@ enum CheckpointStatus: String, Codable {
 enum CheckpointType: String, Codable, CaseIterable {
     case api
     case website
-    case server
-    case database
-    case dns
-    case port
-    case ssl
-    case webhook
     
     var title: String {
         switch self {
@@ -80,39 +74,15 @@ enum CheckpointType: String, Codable, CaseIterable {
             return "API"
         case .website:
             return "Website"
-        case .server:
-            return "Server"
-        case .database:
-            return "Database"
-        case .dns:
-            return "DNS"
-        case .port:
-            return "Port"
-        case .ssl:
-            return "SSL"
-        case .webhook:
-            return "Webhook"
         }
     }
     
     var icon: String {
         switch self {
         case .api:
-            return "arrow.left.arrow.right"
-        case .website:
-            return "globe"
-        case .server:
             return "server.rack"
-        case .database:
-            return "cylinder"
-        case .dns:
+        case .website:
             return "network"
-        case .port:
-            return "point.3.connected.trianglepath.dotted"
-        case .ssl:
-            return "lock.shield"
-        case .webhook:
-            return "arrow.triangle.2.circlepath"
         }
     }
 }
