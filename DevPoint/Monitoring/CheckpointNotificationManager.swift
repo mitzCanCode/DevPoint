@@ -59,8 +59,12 @@ enum CheckpointNotificationManager {
         // Required on newer iOS for reliable banner presentation.
         content.title = checkpoints.count == 1 ? "Checkpoint needs attention" : "Checkpoints need attention"
 
-        if checkpoints.count == 1, let checkpoint = checkpoints.first {
-            content.body = "\(checkpoint.name) is \(checkpoint.status.title.lowercased())."
+if checkpoints.count == 1, let checkpoint = checkpoints.first {
+            if checkpoint.status == .slow {
+                content.body = "\(checkpoint.name) responded in \(checkpoint.lastResponseTimeMs.formatted()) (\(checkpoint.responseTimeDeltaMs.formatted()) slower than expected)."
+            } else {
+                content.body = "\(checkpoint.name) is \(checkpoint.status.title.lowercased())."
+            }
             content.userInfo = ["checkpointName": checkpoint.name]
         } else {
             let names = checkpoints.prefix(3).map(\.name).joined(separator: ", ")

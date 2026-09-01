@@ -12,30 +12,37 @@ struct URLResponseResult {
     let body: String
     let headers: [String: String]
     let errorMessage: String?
+    /// Wall-clock request duration in milliseconds.
+    let responseTimeMs: Int
 
     init(
         statusCode: Int,
         body: String,
         headers: [String: String],
-        errorMessage: String? = nil
+        errorMessage: String? = nil,
+        responseTimeMs: Int = 0
     ) {
         self.statusCode = statusCode
         self.body = body
         self.headers = headers
         self.errorMessage = errorMessage
+        self.responseTimeMs = responseTimeMs
     }
 }
 
 func requestUrl(_ url: URL) async -> URLResponseResult {
+    let started = ContinuousClock.now
     do {
         let (data, response) = try await URLSession.shared.data(from: url)
+        let responseTimeMs = elapsedMilliseconds(since: started)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             return URLResponseResult(
                 statusCode: -1,
                 body: String(data: data, encoding: .utf8) ?? "",
                 headers: [:],
-                errorMessage: "The server did not return an HTTP response."
+                errorMessage: "The server did not return an HTTP response.",
+                responseTimeMs: responseTimeMs
             )
         }
 
@@ -48,7 +55,8 @@ func requestUrl(_ url: URL) async -> URLResponseResult {
         return URLResponseResult(
             statusCode: httpResponse.statusCode,
             body: body,
-            headers: headers
+            headers: headers,
+            responseTimeMs: responseTimeMs
         )
 
     } catch {
@@ -56,9 +64,17 @@ func requestUrl(_ url: URL) async -> URLResponseResult {
             statusCode: -1,
             body: "",
             headers: [:],
-            errorMessage: error.localizedDescription
+            errorMessage: error.localizedDescription,
+            responseTimeMs: elapsedMilliseconds(since: started)
         )
     }
+}
+
+private func elapsedMilliseconds(since start: ContinuousClock.Instant) -> Int {
+    let duration = ContinuousClock.now - start
+    let seconds = Double(duration.components.seconds)
+        + Double(duration.components.attoseconds) / 1_000_000_000_000_000_000
+    return max(0, Int((seconds * 1000).rounded()))
 }
 
 enum ResponseMatchKind: Equatable {
@@ -263,6 +279,8 @@ struct ResponseSampleResult {
     let baseline: URLResponseResult
     let ignoredLineNumbers: [Int]
     let ignoredHeaderNames: [String]
+    /// Mean response time across sample requests, in milliseconds.
+    let expectedResponseTimeMs: Int
 }
 
 let responseSampleRequestCount = 4
@@ -298,24 +316,30 @@ func sampleResponseBaseline(
         throw ResponseSampleError.requestFailed("No responses were received.")
     }
 
-return ResponseSampleResult(
+    let totalMs = samples.reduce(0) { $0 + $1.responseTimeMs }
+    let averageMs = Int((Double(totalMs) / Double(samples.count)).rounded())
+
+    return ResponseSampleResult(
         baseline: baseline,
         ignoredLineNumbers: unstableLineNumbers(across: samples.map(\.body)),
-        ignoredHeaderNames: unstableHeaderNames(across: samples.map(\.headers))
+        ignoredHeaderNames: unstableHeaderNames(across: samples.map(\.headers)),
+        expectedResponseTimeMs: averageMs
     )
 }
 
 func determineCheckpointStatus(
     statusCode: Int,
-    match: ResponseMatchKind
+    match: ResponseMatchKind,
+    isSlow: Bool = false
 ) -> CheckpointStatus {
     switch statusCode {
     case 200...299:
         switch match {
         case .exact:
-            return .healthy
+            return isSlow ? .slow : .healthy
         case .expectedMismatch:
-            return .expectedMismatch
+            // Content is acceptable; still surface unacceptable latency.
+            return isSlow ? .slow : .expectedMismatch
         case .mismatch:
             return .responseMismatch
         }
@@ -340,10 +364,12 @@ func determineCheckpointStatus(
 /// Convenience for call sites that only know whether the raw bodies match.
 func determineCheckpointStatus(
     statusCode: Int,
-    responseMatches: Bool
+    responseMatches: Bool,
+    isSlow: Bool = false
 ) -> CheckpointStatus {
     determineCheckpointStatus(
         statusCode: statusCode,
-        match: responseMatches ? .exact : .mismatch
+        match: responseMatches ? .exact : .mismatch,
+        isSlow: isSlow
     )
 }

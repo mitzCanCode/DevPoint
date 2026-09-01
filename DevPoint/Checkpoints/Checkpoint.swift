@@ -16,13 +16,15 @@ enum CheckpointStatus: String, Codable {
     case warning
     case serverError
     case notFound
-    case responseMismatch
+case responseMismatch
     /// HTTP OK, but the body differs only on lines the user chose to ignore.
     case expectedMismatch
+    /// HTTP OK and content matches, but latency exceeds the configured threshold.
+    case slow
     
     var title: String {
         switch self {
-        case .healthy:
+        case .healthy, .expectedMismatch:
             return "Healthy"
         case .unreachable:
             return "Unreachable"
@@ -36,15 +38,15 @@ enum CheckpointStatus: String, Codable {
             return "Not Found"
         case .responseMismatch:
             return "Response Mismatch"
-        case .expectedMismatch:
-            return "OK (Expected Mismatch)"
+        case .slow:
+            return "Slow Response"
         }
     }
     
     var color: Color {
         switch self {
-        case .healthy:
-            return .green
+        case .healthy, .expectedMismatch:
+            return .mint
         case .unreachable:
             return .red
         case .unknown:
@@ -57,8 +59,8 @@ enum CheckpointStatus: String, Codable {
             return .orange
         case .responseMismatch:
             return .orange
-        case .expectedMismatch:
-            return .mint
+        case .slow:
+            return .yellow
         }
     }
 }
@@ -102,8 +104,12 @@ final class Checkpoint {
     var lastResponseTitle: String
     var lastResponseStatusCode: String
     
-    var lastResponseDescription: String
+var lastResponseDescription: String
     var lastResponse: String
+    /// Baseline latency captured when the expected response was set, in milliseconds.
+    var expectedResponseTimeMs: Int = 0
+    /// Most recent request latency, in milliseconds.
+    var lastResponseTimeMs: Int = 0
     /// JSON-encoded `[String: String]` of the latest response headers.
     var lastResponseHeadersJSON: String = "{}"
     /// JSON-encoded `[String: String]` of the baseline/expected response headers.
@@ -137,21 +143,40 @@ final class Checkpoint {
         self.url = url
         self.expectedResponse = expectedResponse
         
-        self.lastResponseTitle = ""
+self.lastResponseTitle = ""
         self.lastResponseStatusCode = ""
         self.lastResponseDescription = ""
         self.lastResponse = ""
+        self.expectedResponseTimeMs = 0
+        self.lastResponseTimeMs = 0
         self.lastResponseHeadersJSON = "{}"
         self.expectedResponseHeadersJSON = "{}"
         self.ignoredLineNumbers = []
         self.ignoredHeaderNames = []
     }
     
+    /// How much slower the latest response is than the expected baseline, in ms (clamped at 0).
+    var responseTimeDeltaMs: Int {
+        max(0, lastResponseTimeMs - expectedResponseTimeMs)
+    }
+    
+    /// Whether latency alone should flag this checkpoint, based on Settings.
+    var isResponseTooSlow: Bool {
+        guard let thresholdMs = MonitoringSettings.responseTimeThreshold.milliseconds else {
+            return false
+        }
+        guard expectedResponseTimeMs > 0, lastResponseTimeMs > 0 else {
+            return false
+        }
+        return responseTimeDeltaMs >= thresholdMs
+    }
+    
     /// Writes status/body/header fields from a live request result.
     func applyResponseResult(
         _ result: URLResponseResult,
         match: ResponseMatchKind? = nil,
-        updateExpectedHeaders: Bool = false
+        updateExpectedHeaders: Bool = false,
+        expectedResponseTimeMs: Int? = nil
     ) {
         lastResponse = result.body
         lastResponseTitle = result.statusCode == -1
@@ -165,13 +190,21 @@ final class Checkpoint {
         ?? result.errorMessage
         ?? ""
         lastResponseHeaders = result.headers
+        lastResponseTimeMs = result.responseTimeMs
         if updateExpectedHeaders {
             expectedResponseHeaders = result.headers
+        }
+        if let expectedResponseTimeMs {
+            self.expectedResponseTimeMs = expectedResponseTimeMs
         }
         lastRunDate = Date()
         
         if let match {
-            status = determineCheckpointStatus(statusCode: result.statusCode, match: match)
+            status = determineCheckpointStatus(
+                statusCode: result.statusCode,
+                match: match,
+                isSlow: isResponseTooSlow
+            )
         } else {
             recomputeStatus(statusCode: result.statusCode)
         }
@@ -210,7 +243,7 @@ final class Checkpoint {
             code = 200
         }
         
-        status = determineCheckpointStatus(
+status = determineCheckpointStatus(
             statusCode: code,
             match: compareCheckpoint(
                 expectedBody: expectedResponse,
@@ -219,7 +252,8 @@ final class Checkpoint {
                 expectedHeaders: expectedResponseHeaders,
                 actualHeaders: lastResponseHeaders,
                 ignoredHeaderNames: ignoredHeaderNames
-            )
+            ),
+            isSlow: isResponseTooSlow
         )
     }
     

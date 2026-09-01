@@ -10,7 +10,8 @@ import SwiftUI
 struct AddCheckpointResponseView: View {
     let name: String
     let url: URL
-let result: URLResponseResult
+    let result: URLResponseResult
+    let expectedResponseTimeMs: Int
     @Binding var ignoredLineNumbers: [Int]
     @Binding var ignoredHeaderNames: [String]
     let onSave: () -> Void
@@ -19,7 +20,7 @@ let result: URLResponseResult
         Form {
             overviewSection
             
-if !result.headers.isEmpty {
+            if !result.headers.isEmpty {
                 Section {
                     IgnoredHeadersEditor(
                         headers: result.headers,
@@ -71,8 +72,15 @@ if !result.headers.isEmpty {
             LabeledContent("Response Status") {
                 ResponseStatusBadge(statusCode: result.statusCode)
             }
+            
+            LabeledContent("Expected Response Time") {
+                Text(expectedResponseTimeMs.formatted())
+                    .foregroundStyle(.secondary)
+            }
         } header: {
             Text("Overview")
+        } footer: {
+            Text("Expected response time is the average of the sample requests, in milliseconds.")
         }
     }
     
@@ -146,9 +154,11 @@ struct ResponseHeaderRow: View {
             result: URLResponseResult(
                 statusCode: 200,
                 body: "{\"ok\":true}\ntimestamp: 1",
-                headers: ["Content-Type": "application/json"]
+                headers: ["Content-Type": "application/json"],
+                responseTimeMs: 142
             ),
-ignoredLineNumbers: .constant([2]),
+            expectedResponseTimeMs: 156,
+            ignoredLineNumbers: .constant([2]),
             ignoredHeaderNames: .constant(["Date"]),
             onSave: {}
         )

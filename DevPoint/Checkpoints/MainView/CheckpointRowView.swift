@@ -59,75 +59,77 @@ struct CheckpointRowView: View {
     }()
     
     var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    
+                    Image(systemName: checkpoint.checkpointType.icon)
+                        .foregroundStyle(checkpoint.status.color)
+                        .font(.body)
+                        .shadow(color: checkpoint.status.color, radius: 4)
+                    Text(checkpoint.name)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    
+                }
+                
+                HStack {
+                    Image(systemName: "link")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                    Text(checkpoint.url.absoluteString)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+                HStack {
+                    Image(systemName: "gauge.open.with.lines.needle.33percent")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                    Text(checkpoint.lastResponseTimeMs.formatted())
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+                
+            }
             
-                
-                    HStack {
-                        
-VStack(alignment: .leading) {
-                            HStack {
-                                statusIndicator
-
-                                Text(checkpoint.name)
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(1)
-                            }
-                            
-                            HStack(spacing: 4) {
-                                Image(systemName: checkpoint.checkpointType.icon)
-                                Text(checkpoint.checkpointType.title)
-                            }
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            
-                            Text(checkpoint.url.absoluteString)
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
-                        
-                        Spacer()
-                        
-                        VStack(alignment: .trailing) {
-                            if isRefreshing {
-                                ProgressView()
-                                    .controlSize(.mini)
-                            } else {
-                                Text(checkpoint.status.title)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(checkpoint.status.color)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(checkpoint.status.color.opacity(0.12), in: Capsule())
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.85)
-                            }
-                            
-                            Text(lastCheckedDisplay)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
-
-                    }
-                
-                
-                
-                
-                
+            Spacer()
             
-
+            VStack(alignment: .trailing, spacing: 4) {
+                if isRefreshing {
+                    ProgressView()
+                        .controlSize(.mini)
+                } else {
+                    Text(checkpoint.status.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(checkpoint.status.color)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(checkpoint.status.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                
+                Text(isRefreshing ? "Checking live" : lastCheckedDisplay)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                
+                Text("Status code: \(isRefreshing ? "—" : checkpoint.lastResponseStatusCode)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilitySummary)
     }
     
-    private var statusIndicator: some View {
-        Circle()
-            .fill(checkpoint.status.color)
-            .frame(width: 10, height: 10)
-            .shadow(color: checkpoint.status.color, radius: 4)
+    private var responseTimeColor: Color {
+        checkpoint.isResponseTooSlow ? .yellow : Color(.tertiaryLabel)
     }
-    
     
     private var urlBlock: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -135,12 +137,9 @@ VStack(alignment: .leading) {
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            
-            if let pathDisplay {
-            }
         }
     }
-
+    
     private func statusCodeColor(for codeString: String) -> Color {
         guard let code = Int(codeString) else { return checkpoint.status.color }
         switch code {
@@ -157,7 +156,7 @@ VStack(alignment: .leading) {
         }
     }
     
-private var accessibilitySummary: String {
+    private var accessibilitySummary: String {
         var parts = [
             checkpoint.name,
             checkpoint.checkpointType.title,
@@ -167,6 +166,9 @@ private var accessibilitySummary: String {
         if let pathDisplay { parts.append(pathDisplay) }
         if let statusCodeDisplay { parts.append("HTTP \(statusCodeDisplay)") }
         if let contentTypeDisplay { parts.append(contentTypeDisplay) }
+        if checkpoint.lastResponseTimeMs > 0 {
+            parts.append(checkpoint.lastResponseTimeMs.formatted())
+        }
         parts.append(lastCheckedDisplay)
         return parts.joined(separator: ", ")
     }
@@ -183,16 +185,21 @@ private var accessibilitySummary: String {
     healthy.status = .healthy
     healthy.lastResponseStatusCode = "200"
     healthy.lastResponseDescription = "application/json; charset=utf-8"
+    healthy.expectedResponseTimeMs = 120
+    healthy.lastResponseTimeMs = 135
     healthy.lastRunDate = now.addingTimeInterval(-45)
     
     let mismatch = Checkpoint(
         name: "Marketing Site",
         url: URL(string: "https://example.com:8443/status")!,
-        expectedResponse: "ok"
+        expectedResponse: "ok",
+        checkpointType: .api
     )
     mismatch.status = .responseMismatch
     mismatch.lastResponseStatusCode = "200"
     mismatch.lastResponseDescription = "text/html"
+    mismatch.expectedResponseTimeMs = 210
+    mismatch.lastResponseTimeMs = 980
     mismatch.lastRunDate = now.addingTimeInterval(-60 * 12)
     mismatch.ignoredLineNumbers = [3, 8]
     mismatch.ignoredHeaderNames = ["Date", "Age"]

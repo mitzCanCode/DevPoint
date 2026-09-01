@@ -10,17 +10,25 @@ import UIKit
 import UserNotifications
 
 struct SettingsView: View {
-    @AppStorage(MonitoringSettings.checkIntervalKey)
+@AppStorage(MonitoringSettings.checkIntervalKey)
     private var checkIntervalRawValue = MonitoringSettings.defaultCheckInterval.rawValue
 
     @AppStorage(MonitoringSettings.notificationsEnabledKey)
     private var notificationsEnabled = true
+
+    @AppStorage(MonitoringSettings.responseTimeThresholdKey)
+    private var responseTimeThresholdRawValue = MonitoringSettings.defaultResponseTimeThreshold.rawValue
 
     @State private var notificationAuthorization: UNAuthorizationStatus = .notDetermined
     @Environment(\.openURL) private var openURL
 
     private var selectedInterval: CheckInterval {
         CheckInterval(rawValue: checkIntervalRawValue) ?? MonitoringSettings.defaultCheckInterval
+    }
+
+    private var selectedResponseTimeThreshold: ResponseTimeThreshold {
+        ResponseTimeThreshold(rawValue: responseTimeThresholdRawValue)
+            ?? MonitoringSettings.defaultResponseTimeThreshold
     }
 
     var body: some View {
@@ -32,6 +40,7 @@ struct SettingsView: View {
                             Text(interval.title).tag(interval.rawValue)
                         }
                     }
+                    .tint(Color.accent)
                     .onChange(of: checkIntervalRawValue) { _, _ in
                         CheckpointMonitoringService.shared.applySettingsChange()
                     }
@@ -39,6 +48,19 @@ struct SettingsView: View {
                     Text("Automatic checks")
                 } footer: {
                     Text(selectedInterval.detail)
+                }
+
+                Section {
+                    Picker("Unacceptable delay", selection: $responseTimeThresholdRawValue) {
+                        ForEach(ResponseTimeThreshold.allCases) { threshold in
+                            Text(threshold.title).tag(threshold.rawValue)
+                        }
+                    }
+                    .tint(Color.accent)
+                } header: {
+                    Text("Response time")
+                } footer: {
+                    Text(selectedResponseTimeThreshold.detail)
                 }
 
                 Section {
@@ -57,7 +79,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Notifications")
                 } footer: {
-                    Text("You’ll only be notified when a scheduled check finds a problem (unreachable, mismatch, server error, and similar). Healthy and expected-mismatch results stay quiet. Use Send test notification to verify banners work.")
+                    Text("You’ll only be notified when a scheduled check finds a problem (unreachable, mismatch, slow response, server error, and similar). Healthy and expected-mismatch results stay quiet.")
                 }
             }
             .navigationTitle("Settings")

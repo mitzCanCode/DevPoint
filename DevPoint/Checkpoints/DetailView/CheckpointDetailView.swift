@@ -121,6 +121,7 @@ struct CheckpointDetailView: View {
                 InAppBrowserView(url: checkpoint.url)
             }
         }
+        .tint(checkpoint.status.color)
         .task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
@@ -149,6 +150,7 @@ private var editSection: some View {
             .onChange(of: checkpoint.checkpointType) { _, _ in
                 try? modelContext.save()
             }
+            .tint(checkpoint.status.color)
             
             TextField("https://example.com", text: $editedURLString)
                 .keyboardType(.URL)
@@ -182,12 +184,6 @@ private var editSection: some View {
     
 private var overviewSection: some View {
         Section {
-            LabeledContent("Type") {
-                Label(checkpoint.checkpointType.title, systemImage: checkpoint.checkpointType.icon)
-                    .labelStyle(.titleAndIcon)
-                    .foregroundStyle(.secondary)
-            }
-            
             LabeledContent("Health") {
                 HStack(spacing: 6) {
                     Circle()
@@ -204,7 +200,7 @@ private var overviewSection: some View {
                 }
             }
             
-            if !checkpoint.lastResponseTitle.isEmpty {
+if !checkpoint.lastResponseTitle.isEmpty {
                 LabeledContent("Status Code") {
                     Text(checkpoint.lastResponseStatusCode)
                         .foregroundStyle(checkpoint.status.color)
@@ -218,6 +214,23 @@ private var overviewSection: some View {
                     .foregroundStyle(matchColor)
                     .multilineTextAlignment(.trailing)
             }
+
+            LabeledContent("Expected Response Time") {
+                Text(checkpoint.expectedResponseTimeMs.formatted())
+                    .foregroundStyle(.secondary)
+            }
+
+LabeledContent("Latest Response Time") {
+                Text(checkpoint.lastResponseTimeMs.formatted())
+                    .foregroundStyle(responseTimeHighlightColor)
+            }
+
+            if checkpoint.expectedResponseTimeMs > 0, checkpoint.lastResponseTimeMs > 0 {
+                LabeledContent("Delay") {
+                    Text(checkpoint.responseTimeDeltaMs.formatted())
+                        .foregroundStyle(responseTimeHighlightColor)
+                }
+            }
             
             if !checkpoint.lastResponseDescription.isEmpty {
                 LabeledContent("Details") {
@@ -229,7 +242,7 @@ private var overviewSection: some View {
         } header: {
             Text("Overview")
         } footer: {
-            Text("A summary of the checkpoint's current status and latest results.")
+            Text("Response times are measured in milliseconds. Delay is how much slower the latest check is than the expected baseline.")
         }
     }
     
@@ -290,7 +303,7 @@ private var overviewSection: some View {
         }
     }
     
-    private var matchColor: Color {
+private var matchColor: Color {
         switch matchKind {
         case .exact:
             return .green
@@ -299,6 +312,10 @@ private var overviewSection: some View {
         case .mismatch:
             return .orange
         }
+    }
+
+    private var responseTimeHighlightColor: Color {
+        checkpoint.isResponseTooSlow ? .yellow : .secondary
     }
     
     @MainActor

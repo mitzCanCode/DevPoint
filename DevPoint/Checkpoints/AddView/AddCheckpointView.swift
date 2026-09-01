@@ -21,6 +21,7 @@ struct AddCheckpointView: View {
     @State private var requestError: String?
     @State private var saveError: String?
     @State private var responseResult: URLResponseResult?
+    @State private var expectedResponseTimeMs: Int = 0
     @State private var ignoredLineNumbers: [Int] = []
     @State private var ignoredHeaderNames: [String] = []
     @State private var nextStep: Bool = false
@@ -53,6 +54,17 @@ struct AddCheckpointView: View {
                                 .tag(type)
                         }
                     }
+                    .tint(Color.accent)
+
+                    
+                    Picker("Expected Response Time", selection: $expectedResponseTimeMs) {
+                        ForEach(Array(stride(from: 0, through: 3500, by: 50)), id: \.self) { time in
+                            Text("\(time) ms")
+                                .tag(time)
+                        }
+                    }
+                    .tint(Color.accent)
+
                 } header: {
                     Text("Checkpoint Details")
                 } footer: {
@@ -75,6 +87,7 @@ struct AddCheckpointView: View {
                         name: name,
                         url: normalizedURL,
                         result: responseResult,
+                        expectedResponseTimeMs: expectedResponseTimeMs,
                         ignoredLineNumbers: $ignoredLineNumbers,
                         ignoredHeaderNames: $ignoredHeaderNames,
                         onSave: saveCheckpoint
@@ -194,7 +207,8 @@ struct AddCheckpointView: View {
         checkpoint.applyResponseResult(
             result,
             match: .exact,
-            updateExpectedHeaders: true
+            updateExpectedHeaders: true,
+            expectedResponseTimeMs: expectedResponseTimeMs
         )
         
         modelContext.insert(checkpoint)

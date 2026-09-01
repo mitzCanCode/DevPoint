@@ -110,13 +110,14 @@ struct CheckpointExpectedResponseView: View {
             }
             let result = sample.baseline
             
-            checkpoint.expectedResponse = result.body
+checkpoint.expectedResponse = result.body
             ignoredLineNumbers = sample.ignoredLineNumbers
             ignoredHeaderNames = sample.ignoredHeaderNames
             checkpoint.applyResponseResult(
                 result,
                 match: .exact,
-                updateExpectedHeaders: true
+                updateExpectedHeaders: true,
+                expectedResponseTimeMs: sample.expectedResponseTimeMs
             )
             try? modelContext.save()
         } catch {
