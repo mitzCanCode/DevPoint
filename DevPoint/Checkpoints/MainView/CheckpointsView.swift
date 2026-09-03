@@ -56,11 +56,6 @@ struct CheckpointsView: View {
                                 )
                             }
                             .buttonStyle(.plain)
-                            .contextMenu {
-                                Button("Delete", systemImage: "trash", role: .destructive) {
-                                    delete(checkpoint)
-                                }
-                            }
                         }
                         .onDelete(perform: deleteCheckpoints)
                     }

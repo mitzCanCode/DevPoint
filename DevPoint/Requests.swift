@@ -30,10 +30,12 @@ struct URLResponseResult {
     }
 }
 
-func requestUrl(_ url: URL) async -> URLResponseResult {
+func requestUrl(_ url: URL, headers: [String: String] = [:]) async -> URLResponseResult {
     let started = ContinuousClock.now
     do {
-        let (data, response) = try await URLSession.shared.data(from: url)
+        var request = URLRequest(url: url)
+        request.allHTTPHeaderFields = headers
+        let (data, response) = try await URLSession.shared.data(for: request)
         let responseTimeMs = elapsedMilliseconds(since: started)
 
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -290,6 +292,7 @@ let responseSampleDelayNanoseconds: UInt64 = 1_000_000_000
 /// and auto-ignoring body lines and headers that change across samples.
 func sampleResponseBaseline(
     from url: URL,
+    headers: [String: String] = [:],
     sampleCount: Int = responseSampleRequestCount,
     delayNanoseconds: UInt64 = responseSampleDelayNanoseconds,
     onProgress: ((String) -> Void)? = nil
@@ -299,7 +302,7 @@ func sampleResponseBaseline(
 
     for index in 1...sampleCount {
         onProgress?("Request \(index) of \(sampleCount)…")
-        let result = await requestUrl(url)
+        let result = await requestUrl(url, headers: headers)
 
         if let errorMessage = result.errorMessage, result.statusCode == -1 {
             throw ResponseSampleError.requestFailed(errorMessage)

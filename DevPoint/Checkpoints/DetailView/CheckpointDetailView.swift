@@ -19,6 +19,7 @@ struct CheckpointDetailView: View {
     @State private var editedName: String = ""
     @State private var editedURLString: String = ""
     @State private var urlEditError: String?
+    @State private var authorizationToken: String = ""
     
     @State private var now = Date()
     
@@ -30,6 +31,29 @@ struct CheckpointDetailView: View {
         }
         
         return "Last Checked: \(Self.relativeDateFormatter.localizedString( for: checkpoint.lastRunDate, relativeTo: now ))"
+    }
+    
+    @ViewBuilder
+    private var apiRequestSection: some View {
+        if checkpoint.checkpointType == .api {
+            Section {
+                SecureField("Token", text: $authorizationToken)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .onChange(of: authorizationToken) { _, newValue in
+                        checkpoint.authorizationToken = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                        try? modelContext.save()
+                    }
+            } header: {
+                Text("Authorization")
+            } footer: {
+                Text("The token is sent as a Bearer Authorization header.")
+            }
+            RequestHeadersEditor(entries: $checkpoint.requestHeaderEntries)
+                .onChange(of: checkpoint.requestHeaderEntries) { _, _ in
+                    try? modelContext.save()
+                }
+        }
     }
     
     private static let relativeDateFormatter: RelativeDateTimeFormatter = {
@@ -76,6 +100,7 @@ struct CheckpointDetailView: View {
             //            ScrollView{
             Form {
                 editSection
+                apiRequestSection
                 overviewSection
                 navigationSection
             }
@@ -88,6 +113,7 @@ struct CheckpointDetailView: View {
             .onAppear {
                 editedName = checkpoint.name
                 editedURLString = checkpoint.url.absoluteString
+                authorizationToken = checkpoint.authorizationToken
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -130,7 +156,7 @@ struct CheckpointDetailView: View {
         }
     }
     
-private var editSection: some View {
+    private var editSection: some View {
         Section {
             TextField("Name", text: $editedName)
                 .textInputAutocapitalization(.words)
@@ -140,17 +166,6 @@ private var editSection: some View {
                     checkpoint.name = trimmed
                     try? modelContext.save()
                 }
-            
-            Picker("Type", selection: $checkpoint.checkpointType) {
-                ForEach(CheckpointType.allCases, id: \.self) { type in
-                    Label(type.title, systemImage: type.icon)
-                        .tag(type)
-                }
-            }
-            .onChange(of: checkpoint.checkpointType) { _, _ in
-                try? modelContext.save()
-            }
-            .tint(checkpoint.status.color)
             
             TextField("https://example.com", text: $editedURLString)
                 .keyboardType(.URL)
@@ -182,7 +197,7 @@ private var editSection: some View {
         }
     }
     
-private var overviewSection: some View {
+    private var overviewSection: some View {
         Section {
             LabeledContent("Health") {
                 HStack(spacing: 6) {
@@ -200,7 +215,7 @@ private var overviewSection: some View {
                 }
             }
             
-if !checkpoint.lastResponseTitle.isEmpty {
+            if !checkpoint.lastResponseTitle.isEmpty {
                 LabeledContent("Status Code") {
                     Text(checkpoint.lastResponseStatusCode)
                         .foregroundStyle(checkpoint.status.color)
@@ -214,17 +229,17 @@ if !checkpoint.lastResponseTitle.isEmpty {
                     .foregroundStyle(matchColor)
                     .multilineTextAlignment(.trailing)
             }
-
+            
             LabeledContent("Expected Response Time") {
                 Text(checkpoint.expectedResponseTimeMs.formatted())
                     .foregroundStyle(.secondary)
             }
-
-LabeledContent("Latest Response Time") {
+            
+            LabeledContent("Latest Response Time") {
                 Text(checkpoint.lastResponseTimeMs.formatted())
                     .foregroundStyle(responseTimeHighlightColor)
             }
-
+            
             if checkpoint.expectedResponseTimeMs > 0, checkpoint.lastResponseTimeMs > 0 {
                 LabeledContent("Delay") {
                     Text(checkpoint.responseTimeDeltaMs.formatted())
@@ -303,7 +318,7 @@ LabeledContent("Latest Response Time") {
         }
     }
     
-private var matchColor: Color {
+    private var matchColor: Color {
         switch matchKind {
         case .exact:
             return .green
@@ -313,7 +328,7 @@ private var matchColor: Color {
             return .orange
         }
     }
-
+    
     private var responseTimeHighlightColor: Color {
         checkpoint.isResponseTooSlow ? .yellow : .secondary
     }
@@ -321,10 +336,10 @@ private var matchColor: Color {
     @MainActor
     private func refresh() async {
         guard !isRefreshing else { return }
-
+        
         isRefreshing = true
         defer { isRefreshing = false }
-
+        
         await CheckpointMonitoringService.refresh(checkpoint)
         try? modelContext.save()
     }

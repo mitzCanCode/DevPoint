@@ -12,8 +12,8 @@ struct CheckpointDiffView: View {
     let checkpoint: Checkpoint
     @Environment(\.colorScheme) private var colorScheme
     @State private var unifiedDiff = ""
-
-private var matchKind: ResponseMatchKind {
+    
+    private var matchKind: ResponseMatchKind {
         compareCheckpoint(
             expectedBody: checkpoint.expectedResponse,
             actualBody: checkpoint.lastResponse,
@@ -23,7 +23,7 @@ private var matchKind: ResponseMatchKind {
             ignoredHeaderNames: checkpoint.ignoredHeaderNames
         )
     }
-
+    
     var body: some View {
         ScrollView {
             VStack {
@@ -34,7 +34,7 @@ private var matchKind: ResponseMatchKind {
                         systemImage: "checkmark.circle.fill",
                         description: Text("Expected and last response are identical.")
                     )
-case .expectedMismatch:
+                case .expectedMismatch:
                     if unifiedDiff.isEmpty {
                         ContentUnavailableView(
                             "Only ignored fields differ",
@@ -58,7 +58,7 @@ case .expectedMismatch:
             }
             .padding(.horizontal)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-
+            
         }
         .background(Color(.systemBackground))
         .onAppear { updateDiff() }
@@ -67,10 +67,10 @@ case .expectedMismatch:
         .navigationTitle("Latest Body")
         .navigationSubtitle("\(checkpoint.lastResponseTitle) - \(checkpoint.status.title)")
     }
-
+    
     private var fullScreenDiff: some View {
         let theme: DiffTheme = colorScheme == .dark ? .dark : .light
-
+        
         return DiffRenderer(diffText: unifiedDiff)
             .cornerRadius(16)
             .diffConfiguration(DiffConfiguration.mobile.with(theme: theme))
@@ -80,13 +80,13 @@ case .expectedMismatch:
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .id(colorScheme) // force refresh when appearance changes
     }
-
+    
     private func updateDiff() {
         guard checkpoint.expectedResponse != checkpoint.lastResponse else {
             unifiedDiff = ""
             return
         }
-
+        
         unifiedDiff = UnifiedDiffBuilder.make(
             oldText: checkpoint.expectedResponse,
             newText: checkpoint.lastResponse

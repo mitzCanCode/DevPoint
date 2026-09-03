@@ -89,6 +89,17 @@ enum CheckpointType: String, Codable, CaseIterable {
     }
 }
 
+struct RequestHeader: Identifiable, Codable, Equatable {
+    let id: UUID
+    var key: String
+    var value: String
+
+    init(id: UUID = UUID(), key: String = "", value: String = "") {
+        self.id = id
+        self.key = key
+        self.value = value
+    }
+}
 
 
 @Model
@@ -103,6 +114,10 @@ final class Checkpoint {
     var expectedResponse: String
     var lastResponseTitle: String
     var lastResponseStatusCode: String
+    /// Token sent as a Bearer value in the Authorization request header for API checks.
+    var authorizationToken: String = ""
+    /// JSON-encoded `[RequestHeader]` of additional request headers for API checks.
+    var requestHeadersJSON: String = "[]"
     
 var lastResponseDescription: String
     var lastResponse: String
@@ -127,6 +142,47 @@ var lastResponseDescription: String
         get { Self.decodeHeaders(expectedResponseHeadersJSON) }
         set { expectedResponseHeadersJSON = Self.encodeHeaders(newValue) }
     }
+
+    var requestHeaderEntries: [RequestHeader] {
+        get { Self.decodeRequestHeaderEntries(requestHeadersJSON) }
+        set { requestHeadersJSON = Self.encodeRequestHeaderEntries(newValue) }
+    }
+
+    var effectiveRequestHeaders: [String: String] {
+        var headers: [String: String] = [:]
+        for entry in requestHeaderEntries {
+            let key = entry.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !key.isEmpty else { continue }
+            headers[key] = entry.value
+        }
+        let token = authorizationToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !token.isEmpty {
+            headers["Authorization"] = "Bearer \(token)"
+        }
+        return headers
+    }
+
+    private static func encodeRequestHeaderEntries(_ entries: [RequestHeader]) -> String {
+        guard let data = try? JSONEncoder().encode(entries),
+              let string = String(data: data, encoding: .utf8)
+        else {
+            return "[]"
+        }
+        return string
+    }
+
+    private static func decodeRequestHeaderEntries(_ json: String) -> [RequestHeader] {
+        guard let data = json.data(using: .utf8) else { return [] }
+
+        if let entries = try? JSONDecoder().decode([RequestHeader].self, from: data) {
+            return entries
+        }
+
+        // Preserve configurations written by the earlier dictionary-backed editor.
+        return decodeHeaders(json)
+            .map { RequestHeader(key: $0.key, value: $0.value) }
+            .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
+    }
     
     init(
         name: String,
@@ -145,6 +201,8 @@ var lastResponseDescription: String
         
 self.lastResponseTitle = ""
         self.lastResponseStatusCode = ""
+        self.authorizationToken = ""
+        self.requestHeadersJSON = "[]"
         self.lastResponseDescription = ""
         self.lastResponse = ""
         self.expectedResponseTimeMs = 0

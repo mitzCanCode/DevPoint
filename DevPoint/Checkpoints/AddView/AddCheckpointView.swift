@@ -15,6 +15,8 @@ struct AddCheckpointView: View {
     @State private var name: String = ""
     @State private var urlString: String = ""
     @State private var checkpointType: CheckpointType = .website
+    @State private var authorizationToken: String = ""
+    @State private var requestHeaderEntries: [RequestHeader] = []
     
     @State private var isLoading = false
     @State private var loadingProgress: String?
@@ -56,7 +58,6 @@ struct AddCheckpointView: View {
                     }
                     .tint(Color.accent)
 
-                    
                     Picker("Expected Response Time", selection: $expectedResponseTimeMs) {
                         ForEach(Array(stride(from: 0, through: 3500, by: 50)), id: \.self) { time in
                             Text("\(time) ms")
@@ -69,6 +70,19 @@ struct AddCheckpointView: View {
                     Text("Checkpoint Details")
                 } footer: {
                     Text("Enter a name, type, and URL, then open the site or sample the live response. Four requests are made one second apart so fluctuating body lines and headers can be ignored automatically.")
+                }
+
+                if checkpointType == .api {
+                    Section {
+                        SecureField("Token", text: $authorizationToken)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        RequestHeadersEditor(entries: $requestHeaderEntries)
+                    } header: {
+                        Text("API Request")
+                    } footer: {
+                        Text("The token is sent as a Bearer Authorization header. Add any other request headers below.")
+                    }
                 }
                 
                 
@@ -177,7 +191,8 @@ struct AddCheckpointView: View {
         }
         
         do {
-            let sample = try await sampleResponseBaseline(from: url) { progress in
+            let headers = checkpointType == .api ? requestHeadersWithAuthorization : [:]
+            let sample = try await sampleResponseBaseline(from: url, headers: headers) { progress in
                 loadingProgress = progress
             }
             responseResult = sample.baseline
@@ -204,6 +219,10 @@ struct AddCheckpointView: View {
         )
         checkpoint.ignoredLineNumbers = ignoredLineNumbers
         checkpoint.ignoredHeaderNames = ignoredHeaderNames
+        if checkpointType == .api {
+            checkpoint.authorizationToken = authorizationToken.trimmingCharacters(in: .whitespacesAndNewlines)
+            checkpoint.requestHeaderEntries = requestHeaderEntries
+        }
         checkpoint.applyResponseResult(
             result,
             match: .exact,
@@ -220,6 +239,20 @@ struct AddCheckpointView: View {
             modelContext.delete(checkpoint)
             saveError = error.localizedDescription
         }
+    }
+
+    private var requestHeadersWithAuthorization: [String: String] {
+        var headers: [String: String] = [:]
+        for entry in requestHeaderEntries {
+            let key = entry.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !key.isEmpty else { continue }
+            headers[key] = entry.value
+        }
+        let token = authorizationToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !token.isEmpty {
+            headers["Authorization"] = "Bearer \(token)"
+        }
+        return headers
     }
 }
 

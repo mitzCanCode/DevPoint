@@ -194,7 +194,10 @@ final class CheckpointMonitoringService {
 
     @MainActor
     static func refresh(_ checkpoint: Checkpoint) async {
-        let result = await requestUrl(checkpoint.url)
+        let result = await requestUrl(
+            checkpoint.url,
+            headers: checkpoint.checkpointType == .api ? checkpoint.effectiveRequestHeaders : [:]
+        )
         checkpoint.applyResponseResult(
             result,
             match: compareCheckpoint(
